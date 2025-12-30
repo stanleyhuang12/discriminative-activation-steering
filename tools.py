@@ -1,18 +1,22 @@
 import numpy as np 
+import pandas as pd 
 from transformer_lens import HookedTransformer
 import matplotlib.pyplot as plt
 import seaborn as sns 
 
 def generate_sycophantic_responses_df(df): 
-    
-    df = df.copy()
-    
-    a = np.random.rand(len(df))
-    df['is_syco'] = np.where(a < 0.5, 0, 1)
+    df_syco_0 = df.copy()
+    df_syco_0['is_syco'] = 0
+    df_syco_1 = df.copy()
+    df_syco_1['is_syco'] = 1
 
-    df['q'] = df.apply(lambda x: x['question'] + x['answer_matching_behavior'] if x['is_syco'] > 1 
-                       else x['question'] + x['answer_not_matching_behavior'], axis=1)
-    return df 
+    df_contrastive = pd.concat([df_syco_0, df_syco_1], ignore_index=True)
+
+    df_contrastive['q'] = df_contrastive.apply(
+        lambda x: x['question'] + x['answer_matching_behavior'] if x['is_syco'] == 1 else x['question'] + x['answer_not_matching_behavior'], axis=1)
+    
+    df_contrastive['index'] = np.repeat(df.index.values, 2)
+    return df_contrastive.sort_values(by='index', ascending=True)
 
 
 def extract_activations_from_prompts(df, n, model="gpt2-small"): 
@@ -23,11 +27,11 @@ def extract_activations_from_prompts(df, n, model="gpt2-small"):
     samples = df_sample['q'].to_list()
     
     model = HookedTransformer.from_pretrained(model_name=model)
-    _, cache = model.run_with_cache(samples)
-    return cache
+    logits, cache = model.run_with_cache(samples)
+    return logits, cache
 
 
-def visualize_attention_scores(cache, nth_layers, n_heads, kind="pattern", cmap=None):
+def visualize_attention_internals(cache, nth_layers, n_heads, kind="pattern", cmap=None):
     """
     Visualize attention for one example across specified layers and heads.
     
@@ -35,12 +39,20 @@ def visualize_attention_scores(cache, nth_layers, n_heads, kind="pattern", cmap=
         cache: TransformerLens ActivationCache
         nth_layers: list of int, layers to visualize
         n_heads: int, number of attention heads
-        kind: "pattern" (softmaxed attention) or "scores" (raw logits)
+        kind: "pattern" (post softmax) or "scores" (raw attention logits)
         cmap: optional colormap for visualization
     """
+    
+    kind_dict = {
+        "logits": "attn_scores", 
+        "pattern": "pattern", 
+        "pre-softmax": "attn_scores", 
+        "post-softmax": "pattern"
+    }
+    kind = kind_dict.get(kind)
 
     if cmap is None:
-        cmap = "RdBU_r" if kind == "pattern" else "RdBu_r"
+        cmap = "Blues" if kind == "pattern" else "Blues_r"
 
     fig, axes = plt.subplots(len(nth_layers), n_heads, figsize=(2.2 * n_heads, 2.2 * len(nth_layers)), squeeze=False)
     
@@ -52,7 +64,7 @@ def visualize_attention_scores(cache, nth_layers, n_heads, kind="pattern", cmap=
             ax = axes[i, head]
             mat = attn[head].detach().cpu().numpy()
 
-            sns.heatmap(mat[::-1], cmap=cmap, ax=ax, cbar=False, center=0 if kind == "scores" else None)
+            sns.heatmap(mat, cmap=cmap, ax=ax, cbar=False, center=0 if kind == "scores" else None)
 
             # Titles and labels on first row and col only
             if i == 0:
