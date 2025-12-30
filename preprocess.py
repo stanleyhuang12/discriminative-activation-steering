@@ -19,8 +19,13 @@ cache['hook_embed'].size()[0]
 residual, labels = extract_activations_from_prompts(df_train, n_pairs=1, model="gpt2-small", post_residual_stream_only=True, decompose_residual_stream=False)
 
 residual, labels
-last_token_accum = residual[:, :, -1, :]
-last_token_accum.shape
+last_token_accum = residual[:, 0, -1, :]
+pd.DataFrame(last_token_accum)
+pd.DataFrame(np.array(last_token_accum)[[0,1], :])
+
+last_token_accum.numpy()
+pd.DataFrame(last_token_accum[:, 0, :]).iloc[-1]
+
 residual
 labels
 cache.accumulated_resid(return_labels=True)

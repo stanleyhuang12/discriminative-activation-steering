@@ -59,30 +59,42 @@ def extract_activations_from_prompts(df,
 
 
 def retrieve_residual_stream_for_contrastive_pair(cache: ActivationCache, 
-                            positions_to_analyze: List[int],
-                            layers: int,
+                            layers: List[int],
+                            positions_to_analyze: List[int] = -1,
                             decompose_residual_stream=True,
                             normalize_streams=True
                             ): 
+    """_summary_
+
+   Parameters:
+        - cache (ActivationCache): The cache object containing the model activations (residuals, embeddings, etc.).
+        - layers (List[int]): A list of layer indices to extract from the residual stream.
+        - positions_to_analyze (List[int], default=-1): The token positions to analyze within the sequence. -1 typically refers to the last token.
+        - decompose_residual_stream (bool, default=True): If True, decomposes the residuals into their components per layer. If False, returns the accumulated residual stream as-is.
+        - normalize_streams (bool, default=True): If True, applies layer normalization to the residual streams. optional): _description_. Defaults to True.
+
+    Returns:
+        _type_: _description_
+    """
     assert cache['hook_embed'].size()[0] == 2, "Contrastive pairs must have a batch dimension of two."
     
     if decompose_residual_stream: 
-        accum_resids  = cache.decompose_resid(layers=layers, 
+        accum_resids  = cache.decompose_resid(layers=max(layers), 
                                      return_labels=True, 
                                      apply_ln=normalize_streams)
     
     else: 
-        accum_resids = cache.accumulated_resid(layer=layers, 
+        accum_resids = cache.accumulated_resid(layer=max(layers), 
                                                return_labels=True, 
                                                apply_ln=normalize_streams)
     
-    token_resids = {}
     
     for position in positions_to_analyze: 
-        token_resids["positive"] = accum_resids[:, 0, position, :] # [layer, 0th batch, pos, dimensions-of_model]
-        token_resids["negative"] = accum_resids[:, 1, position, :] 
+        pos = accum_resids[:, 0, position, :] # [layer, 0th batch, pos, dimensions-of_model]
+        neg = accum_resids[:, 1, position, :] 
     
-    return token_resids
+    return np.array(pos)[layers, :], np.array(neg)[layers, :]
+
 
 
 
