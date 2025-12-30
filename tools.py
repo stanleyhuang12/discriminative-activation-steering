@@ -1,37 +1,92 @@
 import numpy as np 
 import pandas as pd 
-from transformer_lens import HookedTransformer
+from transformer_lens import HookedTransformer, ActivationCache
 import matplotlib.pyplot as plt
 import seaborn as sns 
+import tiktoken 
+from typing import List
 
-def generate_sycophantic_responses_df(df): 
-    df_syco_0 = df.copy()
-    df_syco_0['is_syco'] = 0
-    df_syco_1 = df.copy()
-    df_syco_1['is_syco'] = 1
 
-    df_contrastive = pd.concat([df_syco_0, df_syco_1], ignore_index=True)
 
-    df_contrastive['q'] = df_contrastive.apply(
-        lambda x: x['question'] + x['answer_matching_behavior'] if x['is_syco'] == 1 else x['question'] + x['answer_not_matching_behavior'], axis=1)
+
+def generate_sycophantic_responses_df(df):
+    df['responses'] = df.apply(
+        lambda x: [x['answer_not_matching_behavior'], x['answer_matching_behavior']], axis=1
+    )
+    df_contrastive = df.explode('responses').reset_index(drop=True)
+    df_contrastive['pair_id'] = df_contrastive.index // 2
+    df_contrastive['prompt'] = df_contrastive['question'] + df_contrastive['responses']
+    df_contrastive['is_syco'] = (df['responses'] == df['answer_matching_behavior']).astype(int)
+    return df_contrastive
+
+
+class ContrastiveActivator(): 
+    pass 
+
+class DiscriminativeActivator(): 
+    pass 
+
+def extract_activations_from_prompts(df, 
+                                     n_pairs, 
+                                     model="gpt2-small"):
+    """
+    Extract activations from prompts in a pairwise manner.
+
+    Args:
+        df: DataFrame with columns ['pair_id', 'prompt', 'response', 'is_syco'].
+        n_pairs: Number of pairs to sample.
+        model: Model name for HookedTransformer.
     
-    df_contrastive['index'] = np.repeat(df.index.values, 2)
-    return df_contrastive.sort_values(by='index', ascending=True)
-
-
-def extract_activations_from_prompts(df, n, model="gpt2-small"): 
+    Returns:
+        logits, cache
+    """
     df = df.copy()
-    df_shuffled = df.sample(frac=1, random_state=18).reset_index(drop=True)
-    df_sample = df_shuffled.iloc[0:n]
     
-    samples = df_sample['q'].to_list()
+    unique_pairs = df['pair_id'].unique()
+    sampled_pairs = pd.Series(unique_pairs).sample(n=n_pairs, random_state=18).tolist()
+    
+    df_sample = df[df['pair_id'].isin(sampled_pairs)]
+    df_sample = df_sample.sort_values('pair_id').reset_index(drop=True)
+    
+    prompts = df_sample['prompt'].to_list()
     
     model = HookedTransformer.from_pretrained(model_name=model)
-    logits, cache = model.run_with_cache(samples)
+    
+    logits, cache = model.run_with_cache(prompts)
+    
+  
     return logits, cache
 
 
-def visualize_attention_internals(cache, nth_layers, n_heads, kind="pattern", cmap=None):
+def retrieve_residual_stream_for_contrastive_pair(cache: ActivationCache, 
+                            positions_to_analyze: List[int],
+                            layers: int,
+                            decompose_residual_stream=True,
+                            normalize_streams=True
+                            ): 
+    assert cache['hook_embed'].size()[0] == 2, "Contrastive pairs must have a batch dimension of two."
+    
+    if decompose_residual_stream: 
+        accum_resids  = cache.decompose_resid(layers=layers, 
+                                     return_labels=True, 
+                                     apply_ln=normalize_streams)
+    
+    else: 
+        accum_resids = cache.accumulated_resid(layer=layers, 
+                                               return_labels=True, 
+                                               apply_ln=normalize_streams)
+    
+    token_resids = {}
+    
+    for position in positions_to_analyze: 
+        token_resids["positive"] = accum_resids[:, 0, position, :] # [layer, 0th batch, pos, dimensions-of_model]
+        token_resids["negative"] = accum_resids[:, 1, position, :] 
+    
+    return token_resids
+
+
+
+def visualize_attention_internals(cache: ActivationCache, nth_layers: int, n_heads: int, kind:str="pattern", cmap:str=None):
     """
     Visualize attention for one example across specified layers and heads.
     
@@ -81,3 +136,31 @@ def visualize_attention_internals(cache, nth_layers, n_heads, kind="pattern", cm
     )
     plt.tight_layout()
     return fig
+
+
+"""
+TO DO: 
+
+Look at which sequence length is the last token? 
+
+"""
+
+def evaluate_sequence_length_of_prompt(prompt, model="gpt2"): 
+    """
+    Takes a prompt and model name and returns a list of tuples of the order and token position
+    
+    e.g., 
+        (0, b'Hello')
+        (1, b' world')
+        (2, b'! ')  
+    """
+    encoder = tiktoken.get_encoding(model)
+    bytes_list = encoder.encode(prompt)
+    
+    decoded_bytes = encoder.decode_tokens_bytes(bytes_list)
+    length_of_bytes = range(len(decoded_bytes))
+    
+    return list(zip(length_of_bytes, decoded_bytes))
+
+
+    
