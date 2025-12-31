@@ -1,0 +1,10 @@
+1. Extract residual stream for one pair of contrastive examples
+
+2. Compute steering vector (option to normalize, intervene on strength, etc)
+
+3. Inject steering vector back into residual stream via a hook function 
+
+4. Further decode responses 
+
+5. Refactor code for 200 examples 
+
