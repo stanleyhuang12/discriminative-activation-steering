@@ -1,7 +1,11 @@
-from typing import List, Dict, Any, Literal
+from typing import List, Dict, Any, Literal, Union
 import numpy as np
 import pandas as pd
 import torch
+import os
+import time 
+import csv
+import json
 
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
@@ -25,6 +29,11 @@ class DiscriminativeSteerer:
         self.model = HookedTransformer.from_pretrained(model_name=model_name)
         
         self._perma_hook_initialized = False 
+        self._set_reproducibility()
+    
+    def _set_reproducibility(self, seed:int = 821): 
+        torch.manual_seed(seed)
+        np.random.seed(seed)
     
     def extract_activations_from_prompts(self, df: pd.DataFrame, n_pairs: int): 
         df = df.copy()
@@ -35,8 +44,9 @@ class DiscriminativeSteerer:
         df_sample = df[df['pair_id'].isin(sampled_pairs)]
         df_sample = df_sample.sort_values('pair_id').reset_index(drop=True)
         
-        prompts = df_sample['prompt'].to_list()
-        self.logits, self.cache = self.model.run_with_cache(prompts)
+        self.prompts = df_sample['prompt'].to_list()
+        
+        self.logits, self.cache = self.model.run_with_cache(self.prompts)
 
         return self.logits, self.cache, self.model
         
@@ -63,11 +73,11 @@ class DiscriminativeSteerer:
         # [n_layers, batch, pos, d_model]
         resids = accum_resids[:, :, positions_to_analyze, :]
 
-        resids = resids.view(resids.size(0), n_pairs,2,resids.size(-1),)         # -> [n_layers, n_pairs, 2, d_model]
+        resids = resids.view(resids.size(0), n_pairs, 2, resids.size(-1),)         # -> [n_layers, n_pairs, 2, d_model]
         pos = resids[:, :, 1, :]
         neg = resids[:, :, 0, :]
         
-        return np.array(pos)[layers], np.array(neg)[layers]
+        return np.array(pos)[layers, :, :], np.array(neg)[layers, :, :]
 
     @staticmethod
     def _compute_diff_vector(pos: np.ndarray, neg: np.ndarray) -> np.ndarray:
@@ -92,7 +102,7 @@ class DiscriminativeSteerer:
 
         return steer_vec
 
-    def initialize_perma_hook_model(self, layer: str, steering_vector: np.ndarray | torch.Tensor) -> HookedTransformer:
+    def initialize_perma_hook_model(self, layer: str, steering_vector: Union[np.ndarray, torch.Tensor]) -> HookedTransformer:
         """
         Registers a permanent hook that injects a steering vector to the HookedTransformer model.
         """
@@ -118,6 +128,7 @@ class DiscriminativeSteerer:
         """
         Internal method that runs linear discriminant analysis on contrastive residual streams for a single layer.
         """
+        print("Running _linear_discriminative_projection")
         pos, neg = self.retrieve_residual_stream_for_contrastive_pair(
             layers=[layer],
             positions_to_analyze=positions_to_analyze,
@@ -132,41 +143,79 @@ class DiscriminativeSteerer:
         neg_df["is_syco"] = 0
 
         df = pd.concat([pos_df, neg_df], axis=0)
+        print(df)
 
-        y = df["is_syco"].values
-        X = df.drop(columns=["is_syco"]).values
-
-        lda = LinearDiscriminantAnalysis(solver="svd")
-        X_proj = lda.fit_transform(X, y)
-        y_pred = lda.predict(X)
-
+        self.y = df["is_syco"].values
+        self.X = df.drop(columns=["is_syco"]).values
+        
+        if self.X.shape[0] < self.X.shape[1]: 
+            solver = "eigen"
+        else: 
+            solver = "svd"
+            
+        lda = LinearDiscriminantAnalysis(solver=solver)
+        X_proj = lda.fit_transform(self.X, self.y)
+        y_pred = lda.predict(self.X)
+        print(y_pred)
+        
         return {
             "layer": layer,
             "projected": X_proj,
             "coeffs": lda.coef_,
             "coeff_norm": np.linalg.norm(lda.coef_),
             "explained_variance": lda.explained_variance_ratio_,
-            "accuracy": accuracy_score(y, y_pred),
-            "confusion_matrix": confusion_matrix(y, y_pred),
-            "classification_report": classification_report(y, y_pred, output_dict=True),
+            "accuracy": accuracy_score(self.y, y_pred),
+            "confusion_matrix": confusion_matrix(self.y, y_pred),
+            "classification_report": classification_report(self.y, y_pred, output_dict=True),
         }
     
     def _sweep_linear_discriminative_projection(self,
+                                                save_dir: str,
                                                 rule: Literal['layer', 'coeff_norm', 'explained_variance', 'accuracy'] = "accuracy", 
                                                 positions_to_analyze: int = -1, 
                                                 normalize_streams: bool = False): 
         """
         Internal method that runs a sweep of the linear discriminant analysis across multiple layers, saves, and ranks results. 
         """
-        
+            
         accumulated_residuals = self.cache.accumulated_resid()
         layers = accumulated_residuals.__len__()
-        
+        print(layers)
         self.cached_results = []
         
         for l in range(layers): 
             ret = self._linear_discriminative_projection(layer=l, positions_to_analyze=positions_to_analyze, normalize_streams=normalize_streams)
             self.cached_results.append(ret)
             
-        sorted_list = sorted(self.cached_results, key=lambda x: x[rule])
-        return sorted_list 
+        self.cached_results.sort(key=lambda x: x[rule])
+        
+        self._save_cached_results(save_dir=save_dir)
+        
+        return self.cached_results
+    
+    def _save_cached_results(self, save_dir): 
+        
+        os.makedirs(save_dir, exist_ok=True)
+        experiment_id = time.time()
+        
+        with open(f"{self.model}_experiment_{experiment_id}.csv", "w", newline='') as res:
+            writer = csv.writer(res)
+            writer.writerow([
+            "Layer", "Coefficients", "Coeff Norm", 
+            "Explained Variance", "Accuracy", 
+            "Confusion Matrix", "Classification Report"
+        ])
+
+        for result in self.cached_results:
+                writer.writerow([
+                    result["layer"],
+                    json.dumps(result["coeffs"].tolist()),          # convert array to string
+                    result["coeff_norm"],
+                    json.dumps(result.get("explained_variance", [])),
+                    result["accuracy"],
+                    json.dumps(result["confusion_matrix"].tolist()),
+                    json.dumps(result["classification_report"])
+                ])
+
+        print(f"Results saved to {save_dir}")
+        return self.cached_results

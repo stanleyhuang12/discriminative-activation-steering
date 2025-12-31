@@ -1,20 +1,47 @@
 from datasets import load_dataset
 import tools 
 from tools import *
+import discriminative
+from discriminative import DiscriminativeSteerer
 import importlib
 importlib.reload(tools)
+importlib.reload(discriminative)
+
 
 ds = load_dataset("Anthropic/model-written-evals")
 df = ds['train'].to_pandas()
 
 df_train = generate_sycophantic_responses_df(df)
-df_train.columns
-df_train.loc[0, ["prompt", "is_syco"]]
-
-df_train['prompt']  
 
 
+# Initializes discriminator object 
+discriminator = DiscriminativeSteerer(model_name='gpt2-medium', d_model=768)
 
+# Extracts activations from the prompts 
+discriminator.extract_activations_from_prompts(df=df_train, n_pairs=10)
+
+
+discriminator.prompts
+# Retrieves the residual stream for contrastive pairs 
+discriminator.retrieve_residual_stream_for_contrastive_pair(layers=[12], 
+                                              positions_to_analyze=-1, 
+                                              decompose_residual_stream=True,
+                                              normalize_streams=False)
+
+
+
+ca, la = discriminator.cache.accumulated_resid(return_labels=True)
+ca.shape
+ca[0].shape
+ca[1].shape
+ca[2].shape
+ca[-1].shape
+# Sweeps through the layers to find the best separability 
+
+discriminator._sweep_linear_discriminative_projection(save_dir='discriminant_pre_results')
+
+
+discriminator.da
 
 _, cache, model = extract_activations_from_prompts(df_train, n_pairs=2, model="gpt2-small")
 pos, neg = retrieve_residual_stream_for_contrastive_pair(cache=cache, 
