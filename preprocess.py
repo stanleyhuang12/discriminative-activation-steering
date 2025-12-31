@@ -14,6 +14,22 @@ df = ds['train'].to_pandas()
 df_train = generate_sycophantic_responses_df(df)
 
 
+model = HookedTransformer.from_pretrained(model_name='gpt2-small')
+logits, cache= model.run_with_cache(df_train['prompt'].loc[18:21].to_list()) 
+cache['blocks.0.hook_resid_pre'].shape
+resids, labels = cache.decompose_resid(layer=1, return_labels=True)
+
+resids.size()
+resids[3].size()
+n = resids[-1][:, -1, :] # layer, batch,  last token , embeddings 
+n.size()
+
+cache['hook_embed'].size(0)
+
+n = n.view(2, 2, n.size(-1))
+n[:, 1, :]
+n[:, 0, :]
+
 # Initializes discriminator object 
 discriminator = DiscriminativeSteerer(model_name='gpt2-medium', d_model=768)
 

@@ -71,11 +71,12 @@ class DiscriminativeSteerer:
             accum_resids = self.cache.accumulated_resid(layer=max_layer, apply_ln=normalize_streams,)
 
         # [n_layers, batch, pos, d_model]
-        resids = accum_resids[:, :, positions_to_analyze, :]
+        resids = accum_resids[-1] #TODO: right now only attn_out layer 
+        resids = accum_resids[:, positions_to_analyze, :]
 
-        resids = resids.view(resids.size(0), n_pairs, 2, resids.size(-1),)         # -> [n_layers, n_pairs, 2, d_model]
-        pos = resids[:, :, 1, :]
-        neg = resids[:, :, 0, :]
+        resids = resids.view(n_pairs, 2, resids.size(-1))         # -> [n_layers, n_pairs, 2, d_model]
+        pos = resids[:, 1, :]
+        neg = resids[:, 0, :]
         
         return np.array(pos)[layers, :, :], np.array(neg)[layers, :, :]
 
