@@ -79,30 +79,7 @@ class DiscriminativeSteerer:
         
         return np.array(pos), np.array(neg)
 
-    @staticmethod
-    def _compute_diff_vector(pos: np.ndarray, neg: np.ndarray) -> np.ndarray:
-        """Compute difference of the vector, which forms the steering vector"""
-        return pos - neg
-
-    def _compute_diff_steering_vector(self, pos: np.ndarray, neg: np.ndarray, steering_coeffs: float, normalize: bool = False) -> np.ndarray:
-        """
-        Computes an averaged steering vector from contrastive activations.
-
-        pos, neg:
-            [n_layers, n_pairs, d_model]
-        """
-        diff = self._compute_diff_vector(pos, neg)
-
-        average_diff = np.mean(diff[0], axis=0, keepdims=True)
-
-        if normalize:
-            steer_vec = (steering_coeffs * average_diff) / np.linalg.norm(average_diff)
-        else:
-            steer_vec = steering_coeffs * average_diff
-
-        return steer_vec
-
-    def initialize_perma_hook_model(self, layer: str, steering_vector: Union[np.ndarray, torch.Tensor]) -> HookedTransformer:
+    def _initialize_perma_hook_model(self, layer: str, steering_vector: Union[np.ndarray, torch.Tensor]) -> HookedTransformer:
         """
         Registers a permanent hook that injects a steering vector to the HookedTransformer model.
         """
@@ -208,7 +185,8 @@ class DiscriminativeSteerer:
         """
         Save cached LDA results to CSV. Handles layers that failed LDA ('error').
         """
-        os.makedirs(save_dir, exist_ok=True)
+        self.save_dir = save_dir
+        os.makedirs(self.save_dir, exist_ok=True)
         experiment_id = int(time.time())
         
         file_path = f"{save_dir}/{self.model_name}_experiment_{experiment_id}.csv"
@@ -217,3 +195,58 @@ class DiscriminativeSteerer:
 
         print(f"Results saved to {file_path}")
         return self.cached_results
+    
+    
+    def _retrieve_steering_vector(self, explicit_layers=None): 
+        if self.cached_results: 
+            if explicit_layers: 
+                result_dict = [res for res in self.cached_results if res['layer'] == explicit_layers][0]
+                coeffs = result_dict['coeffs']
+            else: 
+                print("Retrieving the projection vector from the best accuracy. Only method supported for now.")
+                self.cached_results.sort(key=lambda x: x["accuracy"], reverse=True)
+                coeffs = self.cached_results[0]['coeffs']
+        else: 
+            file_path = os.path.join(self.save_dir, os.listdir(self.save_dir)[-1])
+            with open(file_path, "rb") as f: 
+                res = pickle.load(f)
+                if explicit_layers: 
+                    coeffs = res[explicit_layers]['coeffs']
+                else: 
+                    coeffs = res[0]['coeffs']
+        return coeffs 
+        
+    @property 
+    def _compute_discriminative_steering_vector(self, steering_vec: np.ndarray, steering_coeffs: float, normalize: bool = False) -> np.ndarray:
+        """
+        Computes an averaged steering vector from contrastive activations.
+
+        """
+
+        if normalize:
+            steer_vec = (steering_coeffs * steering_vec) / np.linalg.norm(steering_vec)
+        else:
+            steer_vec = steering_coeffs * steer_vec
+
+        return steer_vec
+    
+    def hook_model_with_discriminative_steer(self, steering_coeffs: float, normalize: bool = False, explicit_layers=None): 
+        """
+        Public method to call that permanently hooks the model with a steering vector. 
+        """
+        if steering_coeffs > 3: 
+            print("Warning!: Steering coefficient may be too large, which can cause model responses to degenerate")
+        steer_vector = self._retrieve_steering_vector(explicit_layers=explicit_layers)
+        steer_vector = self._compute_discriminative_steering_vector(steering_vec=steer_vector, 
+                                                                    steering_coeffs=steering_coeffs, 
+                                                                    normalize=normalize)
+        
+        self._initialize_perma_hook_model(layer=explicit_layers, steering_vector=steer_vector)
+        print(f"Registered a permanent forward hook to {self.model_name} model")
+        
+    def decode_model_responses(prompts): 
+        
+        """
+        Takes in a list of prompts and performs a forward pass of the model responses, save the resulting answers. 
+        """
+        pass 
