@@ -14,6 +14,8 @@ df_train.loc[0, ["prompt", "is_syco"]]
 df_train['prompt']  
 
 
+
+
 _, cache, model = extract_activations_from_prompts(df_train, n_pairs=2, model="gpt2-small")
 pos, neg = retrieve_residual_stream_for_contrastive_pair(cache=cache, 
                                               layers=[12], 
@@ -32,7 +34,7 @@ residual, labels = extract_activations_from_prompts(df_train, n_pairs=1, model="
 steering_vec = compute_steering_vector(pos=pos, neg=neg, steering_coeffs=1.5, normalize=True)
 
 model = initialize_perma_hook_model(model="gpt2-small", layer='blocks.11.hook_resid_pre', steering_vector=steering_vec)
-
+cache.accumulated_residuals()
 pos_df = pd.DataFrame(pos[0])
 pos_df['is_syco'] = 1
 

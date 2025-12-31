@@ -1,0 +1,25 @@
+
+
+
+Conventionally, this idea of finding a subspace that maximally separates the mean of the classes and 
+minimizes the variance of the classes is the Fisher criterion. The Fisher criterion has been operationalized
+via Linear Discriminant Analysis, the goal of which is to find a K-1 (k number of classes) subspace/weights
+to project points on to such that it maximizes separability of classes and minimizes the variance of the classes.
+
+LDA has a few criticisms:
+- Assumes equal variances of each class
+- Assumes independence of points 
+- Assumes a linear discriminative axis 
+
+Perhaps, we can augment LDA by looking at multidimensional steering--steering across rank-N subspaces
+
+
+Extends CAA in a few ways : 
+- A criterion to assess which layer to use (better separability)
+- Enable mulitdimensional steering for multi-class problems 
+- Less noisier estimates than computing difference vectors 
+- 
+
+Challenges of linear probes: 
+- OVerparaamterization 
+- Exploit spurious correlations 

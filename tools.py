@@ -172,11 +172,6 @@ For every single layer:
 """
 
 
-
-
-
-    
-
 def linear_discriminative_projections(cache, layer): 
     
     pos, neg = retrieve_residual_stream_for_contrastive_pair(cache=cache, 
@@ -210,14 +205,18 @@ def linear_discriminative_projections(cache, layer):
         "norm_lda_coeffs": np.linalg.norm(lda.coef_),
         "explained_variance": lda.explained_variance_ratio_
     }
+    
 
-def plot_linear_discriminants(
-    projected_data: np.ndarray,
-    labels: np.ndarray,
-    plot_title: str,
-    label_dict: Optional[Dict[int, str]] = None,
-    alpha: float = 0.25
-):
+def compute_orthogonal_discriminative_projections(cache, layer): 
+    
+    ret_dct = linear_discriminative_projections(cache=cache, layer=layer)
+    np
+
+def plot_linear_discriminants(projected_data: np.ndarray, 
+                              labels: np.ndarray,
+                              plot_title: str,
+                              label_dict: Optional[Dict[int, str]] = None,
+                              alpha: float = 0.85):
     """
     Plot LDA-projected data, color by original class labels.
 
