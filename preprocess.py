@@ -17,34 +17,44 @@ df_train = generate_sycophantic_responses_df(df)
 model = HookedTransformer.from_pretrained(model_name='gpt2-small')
 logits, cache= model.run_with_cache(df_train['prompt'].loc[18:21].to_list()) 
 cache['blocks.0.hook_resid_pre'].shape
-resids, labels = cache.decompose_resid(layer=1, return_labels=True)
+resids, labels = cache.decompose_resid(layer=12, return_labels=True)
 
+resids = resids[-1]
 resids.size()
-resids[3].size()
-n = resids[-1][:, -1, :] # layer, batch,  last token , embeddings 
+n = resids[:, -1, :] # layer, batch,  last token , embeddings 
 n.size()
 
-cache['hook_embed'].size(0)
 
 n = n.view(2, 2, n.size(-1))
-n[:, 1, :]
-n[:, 0, :]
+pos = n[:, 1, :]
+neg = n[:, 0, :]
+
+np.array(pos).shape
 
 # Initializes discriminator object 
-discriminator = DiscriminativeSteerer(model_name='gpt2-medium', d_model=768)
+discriminator = DiscriminativeSteerer(model_name='gpt2-small', d_model=768)
 
 # Extracts activations from the prompts 
-discriminator.extract_activations_from_prompts(df=df_train, n_pairs=10)
+discriminator.extract_activations_from_prompts(df=df_train, n_pairs=2)
 
 
 discriminator.prompts
 # Retrieves the residual stream for contrastive pairs 
-discriminator.retrieve_residual_stream_for_contrastive_pair(layers=[12], 
+pos, neg = discriminator.retrieve_residual_stream_for_contrastive_pair(layers=[12], 
                                               positions_to_analyze=-1, 
                                               decompose_residual_stream=True,
                                               normalize_streams=False)
 
+pos_df = pd.DataFrame(pos)
+pos_df['is_syco'] = 1
+neg_df = pd.DataFrame(neg)
+neg_df['is_syco'] = 0
 
+
+df = pd.concat([pos_df, neg_df], axis=0)
+X = df.drop(['is_syco'], axis=1).values
+y = df['is_syco']
+LinearDiscriminantAnalysis("svd").fit_transform(X, y)
 
 ca, la = discriminator.cache.accumulated_resid(return_labels=True)
 ca.shape
@@ -54,9 +64,10 @@ ca[2].shape
 ca[-1].shape
 # Sweeps through the layers to find the best separability 
 
-discriminator._sweep_linear_discriminative_projection(save_dir='discriminant_pre_results')
+res = discriminator._sweep_linear_discriminative_projection(save_dir='discriminant_pre_results')
 
-
+res.sort(key=lambda x: x['accuracy'], reverse=True)
+res[1]
 discriminator.da
 
 _, cache, model = extract_activations_from_prompts(df_train, n_pairs=2, model="gpt2-small")
@@ -129,4 +140,3 @@ E.g. picking layer 10, I am interested in the 3rd attention head.
 """
 
 df_train.iloc[0:2]
-preprocess()

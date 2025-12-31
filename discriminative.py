@@ -4,8 +4,7 @@ import pandas as pd
 import torch
 import os
 import time 
-import csv
-import json
+import pickle 
 
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
@@ -72,13 +71,13 @@ class DiscriminativeSteerer:
 
         # [n_layers, batch, pos, d_model]
         resids = accum_resids[-1] #TODO: right now only attn_out layer 
-        resids = accum_resids[:, positions_to_analyze, :]
-
+        resids = resids[:, positions_to_analyze, :]
+        print(resids.size())
         resids = resids.view(n_pairs, 2, resids.size(-1))         # -> [n_layers, n_pairs, 2, d_model]
         pos = resids[:, 1, :]
         neg = resids[:, 0, :]
         
-        return np.array(pos)[layers, :, :], np.array(neg)[layers, :, :]
+        return np.array(pos), np.array(neg)
 
     @staticmethod
     def _compute_diff_vector(pos: np.ndarray, neg: np.ndarray) -> np.ndarray:
@@ -125,51 +124,62 @@ class DiscriminativeSteerer:
 
         return self.model
 
-    def _linear_discriminative_projection(self, layer: int, positions_to_analyze: int = -1,  normalize_streams: bool = False,) -> Dict[str, Any]:
+    def _linear_discriminative_projection(self, layer: int, positions_to_analyze: int = -1, normalize_streams: bool = False,) -> Dict[str, Any]:
         """
         Internal method that runs linear discriminant analysis on contrastive residual streams for a single layer.
+        Catches exceptions if LDA fails (e.g., degenerate inputs) and returns 'error'.
         """
-        print("Running _linear_discriminative_projection")
-        pos, neg = self.retrieve_residual_stream_for_contrastive_pair(
-            layers=[layer],
-            positions_to_analyze=positions_to_analyze,
-            decompose_residual_stream=True,
-            normalize_streams=normalize_streams,
-        )
-
-        pos_df = pd.DataFrame(pos[0])
-        pos_df["is_syco"] = 1
-
-        neg_df = pd.DataFrame(neg[0])
-        neg_df["is_syco"] = 0
-
-        df = pd.concat([pos_df, neg_df], axis=0)
-        print(df)
-
-        self.y = df["is_syco"].values
-        self.X = df.drop(columns=["is_syco"]).values
+        print(f"Running _linear_discriminative_projection for layer {layer}")
         
-        if self.X.shape[0] < self.X.shape[1]: 
-            solver = "eigen"
-        else: 
-            solver = "svd"
+        try:
+            pos, neg = self.retrieve_residual_stream_for_contrastive_pair(
+                layers=[layer],
+                positions_to_analyze=positions_to_analyze,
+                decompose_residual_stream=True,
+                normalize_streams=normalize_streams,
+            )
+
+            pos_df = pd.DataFrame(pos)
+            pos_df["is_syco"] = 1
+            print
+
+            neg_df = pd.DataFrame(neg)
+            neg_df["is_syco"] = 0
+
+            df = pd.concat([pos_df, neg_df], axis=0)
+
+            self.y = df["is_syco"].values
+            self.X = df.drop(columns=["is_syco"]).values
             
-        lda = LinearDiscriminantAnalysis(solver=solver)
-        X_proj = lda.fit_transform(self.X, self.y)
-        y_pred = lda.predict(self.X)
-        print(y_pred)
-        
-        return {
-            "layer": layer,
-            "projected": X_proj,
-            "coeffs": lda.coef_,
-            "coeff_norm": np.linalg.norm(lda.coef_),
-            "explained_variance": lda.explained_variance_ratio_,
-            "accuracy": accuracy_score(self.y, y_pred),
-            "confusion_matrix": confusion_matrix(self.y, y_pred),
-            "classification_report": classification_report(self.y, y_pred, output_dict=True),
-        }
+            lda = LinearDiscriminantAnalysis()
+            
+            X_proj = lda.fit_transform(self.X, self.y)
+            y_pred = lda.predict(self.X)
+
+            return {
+                "layer": layer,
+                "projected": X_proj,
+                "coeffs": lda.coef_,
+                "coeff_norm": np.linalg.norm(lda.coef_),
+                "explained_variance": lda.explained_variance_ratio_,
+                "accuracy": accuracy_score(self.y, y_pred),
+                "confusion_matrix": confusion_matrix(self.y, y_pred),
+                "classification_report": classification_report(self.y, y_pred, output_dict=True),
+            }
     
+        except Exception as e:
+            print(f"Layer {layer} failed: {e}")
+            return {
+                "layer": layer,
+                "projected": "error",
+                "coeffs": "error",
+                "coeff_norm": 0.0,
+                "explained_variance": "error",
+                "accuracy": 0.0,
+                "confusion_matrix": "error",
+                "classification_report": "error",
+            }
+
     def _sweep_linear_discriminative_projection(self,
                                                 save_dir: str,
                                                 rule: Literal['layer', 'coeff_norm', 'explained_variance', 'accuracy'] = "accuracy", 
@@ -188,35 +198,22 @@ class DiscriminativeSteerer:
             ret = self._linear_discriminative_projection(layer=l, positions_to_analyze=positions_to_analyze, normalize_streams=normalize_streams)
             self.cached_results.append(ret)
             
-        self.cached_results.sort(key=lambda x: x[rule])
+        self.cached_results.sort(key=lambda x: x[rule], reverse=True)
         
         self._save_cached_results(save_dir=save_dir)
         
         return self.cached_results
     
     def _save_cached_results(self, save_dir): 
-        
+        """
+        Save cached LDA results to CSV. Handles layers that failed LDA ('error').
+        """
         os.makedirs(save_dir, exist_ok=True)
-        experiment_id = time.time()
+        experiment_id = int(time.time())
         
-        with open(f"{self.model}_experiment_{experiment_id}.csv", "w", newline='') as res:
-            writer = csv.writer(res)
-            writer.writerow([
-            "Layer", "Coefficients", "Coeff Norm", 
-            "Explained Variance", "Accuracy", 
-            "Confusion Matrix", "Classification Report"
-        ])
+        file_path = f"{save_dir}/{self.model_name}_experiment_{experiment_id}.csv"
+        with open(file_path, "wb") as f:
+            pickle.dump(self.cached_results, f)
 
-        for result in self.cached_results:
-                writer.writerow([
-                    result["layer"],
-                    json.dumps(result["coeffs"].tolist()),          # convert array to string
-                    result["coeff_norm"],
-                    json.dumps(result.get("explained_variance", [])),
-                    result["accuracy"],
-                    json.dumps(result["confusion_matrix"].tolist()),
-                    json.dumps(result["classification_report"])
-                ])
-
-        print(f"Results saved to {save_dir}")
+        print(f"Results saved to {file_path}")
         return self.cached_results
