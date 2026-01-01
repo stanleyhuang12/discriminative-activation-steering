@@ -58,8 +58,9 @@ S_b \mathbf{v} = \lambda S_w \mathbf{v}
 For K = 2, the solution simplifies to:
 ```math 
  \mathbf{v}_{\text{Fisher}} = S_w^{-1} (\mu_1 - \mu_2)
-$\mathbf{v}_{\text{Fisher}} \propto \mathbf{S}_w^{-1} (\mu_1 - \mu_0)$
-
+```
+```math
+\mathbf{v}_{\text{Fisher}} \propto \mathbf{S}_w^{-1} (\mu_1 - \mu_0)$
 ```
 - $\mu_1$, mean activations of the first class
 - $\mu_0$ mean activations of the second class 
