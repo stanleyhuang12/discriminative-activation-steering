@@ -34,7 +34,11 @@ where $v$ is the projection direction, $\μ_{k}$ is the mean of class k, $\x_{n}
 ### Rewrite in matrix form 
 
 ```math 
-\text{Let } S_b = (\mu_1 - \mu_2)(\mu_1 - \mu_2)^\top \quad \text{(between-class scatter)} \text{Let } S_w = \sum_{k=1}^{K} \sum_{x_n \in C_k} (x_n - \mu_k)(x_n - \mu_k)^\top \quad \text{(within-class scatter)} \text{Then: } \quad \arg\max_{\mathbf{v}} J(\mathbf{v}) = \arg\max_{\mathbf{v}} \frac{\mathbf{v}^\top S_b \mathbf{v}}{\mathbf{v}^\top S_w \mathbf{v}}
+\text{Let } S_b = (\mu_1 - \mu_2)(\mu_1 - \mu_2)^\top \quad \text{(between-class scatter)} 
+\text{Let } S_w = \sum_{k=1}^{K} \sum_{x_n \in C_k} (x_n - \mu_k)(x_n - \mu_k)^\top \quad \text{(within-class scatter)} 
+```
+```math
+\text{Then: } \quad \arg\max_{\mathbf{v}} J(\mathbf{v}) = \arg\max_{\mathbf{v}} \frac{\mathbf{v}^\top S_b \mathbf{v}}{\mathbf{v}^\top S_w \mathbf{v}}
 ```
 
 ### Formulate problem as a generalized eigenvalue problem
