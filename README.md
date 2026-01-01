@@ -37,6 +37,59 @@ While these approaches are effective, they are **variance-agnostic**: they do no
     - [ ] Compute the eigenvalue as a metric for relative discriminability 
     - [ ] Define function to decode the responses for ood examples 
 
+### How to use: 
+```code 
+from discriminative import DiscriminativeSteerer, DiscriminativeVisualizer
+
+
+model_name = "gpt2-small"  # replace with your model, see TransformerLens library for module names 
+steerer = DiscriminativeSteerer(model_name=model_name, d_model=768) # initializes steerer 
+
+df = pd.read_csv("contrastive_prompts.csv")
+n_pairs = 50
+
+
+logits, cache, model = steerer.extract_activations_from_prompts(df, n_pairs) # Extracts activations, logits, and returns the model
+
+
+steerer.sweep_linear_discriminant_analysis(save_dir="analysis") # Recursively runs through all the layers and identifies discriminative axis, saves responses to a folder called "analysis"
+
+steerer.cached_results 
+
+"""
+Returns a list of result dictionaries
+
+{
+    "layer": layer, # Layer number 
+    "params": {
+        "projected": Projecting activations on to the discriminative axis v @ X 
+        "coeffs": The steering vector, v
+        "coeff_norm": Euclidean norm of the steering vector, |v|
+        "predictions": Model predictions of the classes when projected 
+    },
+    "explained_variance": Explained variance 
+    "accuracy": accuracy_score(y_true, y_pred),
+    "confusion_matrix": confusion_matrix(y_true, y_pred),
+    "classification_report": classification_report(y_true, y_pred) in a dictionary format,
+
+}
+"""
+```
+
+```math
+
+
+visualizer = DiscriminativeVisualizer(steerer=steerer)
+label_dict = {0: "Negative", 1: "Positive"}
+visualizer.plot_discriminative_projections(
+    plot_title="Layerwise Discriminative Projections", # plot title 
+    label_dict=label_dict, #label dictionary 
+    alpha=0.85 #point color 
+) ## Projects activation onto discriminative axis and plots overlaid a distribution over so you can visualize which layer is maximally performant for discriminating features 
+
+```
+![Layerwise Discriminative Projection][asset/demo_image/example_projections.png]
+
 ## Mathematic explanation 
 
 The **Fisher criterion** provides a principled, variance-aware approach to identify discriminative directions. It selects a vector $\( \mathbf{v} \)$ that **maximizes the separation between class means relative to within-class variance**:

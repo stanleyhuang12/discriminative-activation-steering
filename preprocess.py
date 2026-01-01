@@ -31,14 +31,12 @@ DiscriminativeVisualizer
 
 
 
+
 residual, labels = extract_activations_from_prompts(df_train, n_pairs=1, model="gpt2-small", post_residual_stream_only=True, decompose_residual_stream=False)
 
 visualizer = DiscriminativeVisualizer(steerer=discriminator, 
                                         layers_to_visualize=1)
 
-visualizer.plot_discriminative_projections(plot_title='Discriminant projections of sycophantic points', 
-                                           label_dict={0: 'not_syco', 
-                                                       1: 'is_syco'})
 
 import pickle 
 with open(discriminator.file_path, "rb") as f: 
