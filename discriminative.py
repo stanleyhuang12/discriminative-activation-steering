@@ -13,6 +13,7 @@ from transformer_lens import HookedTransformer, ActivationCache
 from transformer_lens.hook_points import HookPoint
 
 import matplotlib.pyplot as plt 
+import seaborn as sns
 
 
 class DiscriminativeSteerer:
@@ -286,79 +287,107 @@ class DiscriminativeVisualizer:
             self.results = pickle.load(f)
         return self.results 
     
-    def _plot_linear_discriminants(self, projected_data: np.ndarray, 
-                                  labels: np.ndarray,
-                                  plot_title: str,
-                                  label_dict: Optional[Dict[int, str]] = None,
-                                  alpha: float = 0.85):
+    
+    
+    def plot_1d_layerwise_with_distribution(layer_to_projected: Dict[int, np.ndarray],
+                                            labels: np.ndarray,
+                                            plot_title: str,
+                                            label_dict: Optional[Dict[int, str]] = None,
+                                            alpha: float = 0.85,
+                                            jitter: float = 0.02,
+                                            ):
         """
-        Plot LDA-projected data, color by original class labels.
+        Plot 1D LDA projections across layers as stacked subplots,
+        with tiny distributions overlaid per class.
 
         Args:
-            projected_data: (N, D) array from lda.transform(X)
-            labels: (N,) array of class labels (e.g. 0 / 1).. Maximum of three class is supported (3d visualization of a 2d subspace) but may need to debug code
-            plot_title: Title of the plot
-            label_dict: Optional mapping {0: "negative", 1: "positive"}
-            alpha: Scatter transparency
+            layer_to_projected: dict {layer_idx: (N, 1) or (N,)}
+            labels: (N,)
+            plot_title: overall figure title
+            label_dict: optional {0: "neg", 1: "pos"}
+            alpha: scatter transparency
+            jitter: vertical jitter for scatter
         """
-        if label_dict is None:
-            label_dict = {label: str(label) for label in np.unique(labels)}
 
-        projected_data = np.asarray(projected_data)
-        labels = np.asarray(labels)
+        layers = sorted(layer_to_projected.keys())
+        n_layers = len(layers)
+        classes = np.unique(labels)
+        colors = sns.color_palette("tab10", n_colors=len(classes))
 
-        unique_labels = np.unique(labels)
+        fig, axes = plt.subplots(
+            n_layers, 1,
+            figsize=(8, 1.2 * n_layers),
+            sharex=True
+        )
 
-        if projected_data.shape[1] == 1:
-            x = projected_data[:, 0]
+        if n_layers == 1:
+            axes = [axes]
 
-            for label in unique_labels:
-                mask = labels == label
-                plt.scatter(x[mask], np.zeros(mask.sum()), alpha=alpha, label=label_dict.get(label, str(label)))
+        for ax, layer in zip(axes, layers):
+            x = layer_to_projected[layer].squeeze()
 
-                class_mean = x[mask].mean()
-                plt.scatter(class_mean, 0, color="black", zorder=5)
-                plt.text(class_mean, 0.02, f"μ = {class_mean:.2f}", ha="center")
+            for i, cls in enumerate(classes):
+                mask = labels == cls
+                y = np.random.normal(0, jitter, size=mask.sum())
 
-            if len(unique_labels) == 2:
-                mean_0 = x[labels == unique_labels[0]].mean()
-                mean_1 = x[labels == unique_labels[1]].mean()
-                decision_boundary = 0.5 * (mean_0 + mean_1)
-                plt.axvline(decision_boundary, linestyle="--", color="black", label="Decision midpoint")
+                ax.scatter(x[mask],
+                           y,
+                           alpha=alpha,
+                           s=12,
+                           color=colors[i],
+                           label=label_dict.get(cls, cls) if label_dict else cls)
 
-            plt.yticks([])
-            plt.xlabel("Linear Discriminant 1")
+                sns.kdeplot(
+                    x=x[mask],
+                    ax=ax,
+                    bw_adjust=0.5,
+                    clip=(x.min(), x.max()),
+                    fill=True,
+                    alpha=0.15,
+                    color=colors[i],
+                    linewidth=0
+                )
 
-        else:
-            for label in unique_labels:
-                mask = labels == label
-                plt.scatter(projected_data[mask, 0], projected_data[mask, 1], alpha=alpha, label=label_dict.get(label, str(label)), edgecolors="none")
+            ax.set_yticks([])
+            ax.set_ylabel(f"L{layer}", rotation=0, labelpad=25, fontsize=9)
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+            ax.spines["left"].set_visible(False)
 
-                centroid = projected_data[mask, :2].mean(axis=0)
-                plt.scatter(centroid[0],centroid[1],color="black",zorder=5)
+        axes[-1].set_xlabel("LDA projection", fontsize=10)
+        axes[-1].tick_params(axis="x", length=3)
 
-            plt.xlabel("Linear Discriminant 1")
-            plt.ylabel("Linear Discriminant 2")
+        if label_dict:
+            axes[0].legend(frameon=False,loc="upper right",fontsize=8)
 
-        plt.title(plot_title)
-        plt.legend()
-        plt.ylim(-0.4, len(unique_labels) - 1 + 0.4)
-        plt.grid(False)
+        fig.suptitle(plot_title, fontsize=12, y=0.995)
         plt.tight_layout()
         plt.show()
         
     
-    def plot_discriminative_projections(self, plot_title: str, label_dict: any): 
+    def plot_discriminative_projections(self, plot_title: str, label_dict: any, alpha:any=0.85, jitter:any=0.0): 
         self._deserialize_cached_results()
         
-        projected = self.results[0]['params']['projected']
+        sorted_result = sorted(self.results, key=lambda x: x['layer']) 
+        layers_to_project = { }
+        for res in sorted_result: 
+            layer = res['layer']
+            layer_name = f'layer_{layer}'
+            projected = res['params']['projected']
+            layers_to_project[layer_name] = projected
+        
         labels = self.steerer.y
+            
+        # Takes the results and parses into a dictionary called 
+        # layers_to_project: { 
+        #  'layer_idx': projected matrix }
         
-        self._plot_linear_discriminants(projected_data=projected, 
-                                        labels=labels,
-                                        plot_title=plot_title, 
-                                        label_dict=label_dict)
-        
+        self.plot_1d_layerwise_with_distribution(layers_to_project=layers_to_project,
+                                                 labels=labels,
+                                                 plot_title=plot_title, 
+                                                 label_dict=label_dict, 
+                                                 alpha=alpha,
+                                                 jitter=jitter)
         
         return None 
     
