@@ -12,6 +12,8 @@ from sklearn.metrics import accuracy_score, confusion_matrix, classification_rep
 from transformer_lens import HookedTransformer, ActivationCache
 from transformer_lens.hook_points import HookPoint
 
+import matplotlib.pyplot as plt 
+
 
 class DiscriminativeSteerer:
     """
@@ -189,11 +191,11 @@ class DiscriminativeSteerer:
         os.makedirs(self.save_dir, exist_ok=True)
         experiment_id = int(time.time())
         
-        file_path = f"{save_dir}/{self.model_name}_experiment_{experiment_id}.csv"
-        with open(file_path, "wb") as f:
+        self.file_path = f"{save_dir}/{self.model_name}_experiment_{experiment_id}.csv"
+        with open(self.file_path, "wb") as f:
             pickle.dump(self.cached_results, f)
 
-        print(f"Results saved to {file_path}")
+        print(f"Results saved to {self.file_path}")
         return self.cached_results
     
     
@@ -250,3 +252,95 @@ class DiscriminativeSteerer:
         Takes in a list of prompts and performs a forward pass of the model responses, save the resulting answers. 
         """
         pass 
+
+
+"""
+
+We need the steering vector, activations of each layer, and then to multiply them together to get results 
+We already computed it once and it is stored as a JSON dictionary object
+"""
+
+class DiscriminativeVisualizer: 
+    """
+    Module that takes a Discriminative Steerer and layers to visualize to create various plots for each layer 
+    and visualizes how performant the discriminant axis is.
+    """
+    def __init__(self, steerer: DiscriminativeSteerer, layers_to_visualize: int):
+        self.steerer = steerer
+        self.layers_to_visualize = layers_to_visualize 
+        
+        self._compute_projected_vector()
+        
+    
+    def _compute_projected_vector(self): 
+        
+        steer_vector = self.steerer._retrieve_steering_vector(explicit_layers=self.layers_to_visualize)
+        self.proj_vector = self.steer.X @ steer_vector 
+            # X is m rows, n features @ n_features x 1 = (m_rows x 1)
+        return self.proj_vector 
+    
+
+    def plot_linear_discriminants(projected_data: np.ndarray, 
+                                labels: np.ndarray,
+                                plot_title: str,
+                                label_dict: Optional[Dict[int, str]] = None,
+                                alpha: float = 0.85):
+        """
+        Plot LDA-projected data, color by original class labels.
+
+        Args:
+            projected_data: (N, D) array from lda.transform(X)
+            labels: (N,) array of class labels (e.g. 0 / 1)
+            plot_title: Title of the plot
+            label_dict: Optional mapping {0: "negative", 1: "positive"}
+            alpha: Scatter transparency
+        """
+        if label_dict is None:
+            label_dict = {label: str(label) for label in np.unique(labels)}
+
+        projected_data = np.asarray(projected_data)
+        labels = np.asarray(labels)
+
+        unique_labels = np.unique(labels)
+
+        if projected_data.shape[1] == 1:
+            x = projected_data[:, 0]
+
+            for label in unique_labels:
+                mask = labels == label
+                plt.scatter(x[mask], np.zeros(mask.sum()), alpha=alpha, label=label_dict.get(label, str(label)))
+
+                class_mean = x[mask].mean()
+                plt.scatter(class_mean, 0, color="black", zorder=5)
+                plt.text(class_mean, 0.02, f"μ = {class_mean:.2f}", ha="center")
+
+            if len(unique_labels) == 2:
+                mean_0 = x[labels == unique_labels[0]].mean()
+                mean_1 = x[labels == unique_labels[1]].mean()
+                decision_boundary = 0.5 * (mean_0 + mean_1)
+                plt.axvline(decision_boundary, linestyle="--", color="black", label="Decision midpoint")
+
+            plt.yticks([])
+            plt.xlabel("Linear Discriminant 1")
+
+
+        else:
+            for label in unique_labels:
+                mask = labels == label
+                plt.scatter(projected_data[mask, 0], projected_data[mask, 1], alpha=alpha, label=label_dict.get(label, str(label)), edgecolors="none")
+
+                centroid = projected_data[mask, :2].mean(axis=0)
+                plt.scatter(centroid[0],centroid[1],color="black",zorder=5)
+
+            plt.xlabel("Linear Discriminant 1")
+            plt.ylabel("Linear Discriminant 2")
+
+        plt.title(plot_title)
+        plt.legend()
+        plt.ylim(-0.4, len(unique_labels) - 1 + 0.4)
+        plt.grid(False)
+        plt.tight_layout()
+        plt.show()
+            
+            
+        
