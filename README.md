@@ -21,15 +21,42 @@ This idea motivated my current work:
 
 While these approaches are effective, they are **variance-agnostic**: they do not account for how much activations fluctuate within each class. This can limit robustness, particularly for out-of-distribution inputs.
 
-The **Fisher criterion** provides a principled, variance-aware approach to identify discriminative directions. It selects a vector \( \mathbf{v} \) that **maximizes the separation between class means relative to within-class variance**:
-
-$'\mathbf{v}_{\text{Fisher}} \propto \mathbf{S}_w^{-1} (\mu_1 - \mu_0)$
+The **Fisher criterion** provides a principled, variance-aware approach to identify discriminative directions. It selects a vector $\( \mathbf{v} \)$ that **maximizes the separation between class means relative to within-class variance**:
 
 
-- $'\mu_1'$, $'\mu_0 \'$ are the class-specific mean activations,  
-- \mathbf{S}_w  is the within-class covariance matrix of activations.
+### Define the Fisher criterion:
 
-Intuitively, the objective of the Fisher criterion is to find a $'\[w\]'$ direction in the feature such that the projected class means are as far apart and the within-class variance is as small as possible. Given that the Fisher criterion minimizes within-class variance, this could improve robustness especially for both in-distribution and out-of-distribution steering. Moreover, this criterion enables us to downweight directions of the model activations varies quite a lot because they are noisy for steering.This align with Tan et al.'s observation that some features are resistant to steering because high within-class variance diminshes the effect of a linear intervention. 
+```math
+\text{Fisher criterion: } J(\mathbf{v}) = \frac{ (\mathbf{v}^\top \mu_1 - \mathbf{v}^\top \mu_2)^2 } { \sum_{k=1}^{K} \sum_{x_n \in C_k} (\mathbf{v}^\top (x_n - \mu_k))^2 } 
+```
+where $v$ is the projection direction, $\μ_{k}$ is the mean of class k, $\x_{n}$ are the data points in class k. For simplicity we will treat k as 2, thus a binary classification problem.
+
+### Rewrite in matrix form 
+
+```math 
+\text{Let } S_b = (\mu_1 - \mu_2)(\mu_1 - \mu_2)^\top \quad \text{(between-class scatter)} \text{Let } S_w = \sum_{k=1}^{K} \sum_{x_n \in C_k} (x_n - \mu_k)(x_n - \mu_k)^\top \quad \text{(within-class scatter)} \text{Then: } \quad \arg\max_{\mathbf{v}} J(\mathbf{v}) = \arg\max_{\mathbf{v}} \frac{\mathbf{v}^\top S_b \mathbf{v}}{\mathbf{v}^\top S_w \mathbf{v}}
+```
+
+### Formulate problem as a generalized eigenvalue problem
+
+```math
+\text{Maximizing the Rayleigh quotient leads to a generalized eigenvalue problem:} S_b \mathbf{v} = \lambda S_w \mathbf{v}
+```
+λ is the eigenvalue (the optimal Rayleigh quotient) # - v is the eigenvector corresponding to the maximum separation direction. The lambda also gives us a nice value to describe the discriminability of the class relative to the noise within the classes. This could be useful perhaps when we ablate the residual stream and see the respective impact on lambda (i.e., how does it affect the relative discriminability with respects to input variance). 
+
+### Closed-form solution for binary classes
+
+```math 
+\text{For K = 2, the solution simplifies to:} \mathbf{v}_{\text{Fisher}} = S_w^{-1} (\mu_1 - \mu_2)
+$\mathbf{v}_{\text{Fisher}} \propto \mathbf{S}_w^{-1} (\mu_1 - \mu_0)$
+
+```
+- $\mu_1$, mean activations of the first class
+- $'\mu_0'$ mean activations of the second class 
+- $\mathbf{S}_w$  is the within-class covariance matrix of activations.
+
+
+Intuitively, the objective of the Fisher criterion is to find a $\v$ direction in the feature such that the projected class means are as far apart and the within-class variance is as small as possible. Given that the Fisher criterion minimizes within-class variance, this could improve robustness especially for both in-distribution and out-of-distribution steering. Moreover, this criterion enables us to downweight directions of the model activations varies quite a lot because they are noisy for steering.This align with Tan et al.'s observation that some features are resistant to steering because high within-class variance diminshes the effect of a linear intervention. 
 
 
 
