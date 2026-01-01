@@ -37,58 +37,61 @@ While these approaches are effective, they are **variance-agnostic**: they do no
     - [ ] Compute the eigenvalue as a metric for relative discriminability 
     - [ ] Define function to decode the responses for ood examples 
 
-### How to use: 
-```code 
+
+### How to Use
+
+```python
 from discriminative import DiscriminativeSteerer, DiscriminativeVisualizer
+import pandas as pd
 
+# 1️⃣ Initialize the steerer
+model_name = "gpt2-small"  # replace with your model
+steerer = DiscriminativeSteerer(model_name=model_name, d_model=768)
 
-model_name = "gpt2-small"  # replace with your model, see TransformerLens library for module names 
-steerer = DiscriminativeSteerer(model_name=model_name, d_model=768) # initializes steerer 
-
+# 2️⃣ Load contrastive prompts
 df = pd.read_csv("contrastive_prompts.csv")
 n_pairs = 50
 
+# 3️⃣ Extract activations
+logits, cache, model = steerer.extract_activations_from_prompts(df, n_pairs)
 
-logits, cache, model = steerer.extract_activations_from_prompts(df, n_pairs) # Extracts activations, logits, and returns the model
+# 4️⃣ Run LDA sweep across all layers
+steerer.sweep_linear_discriminant_analysis(save_dir="analysis")
 
+# 5️⃣ Access cached results
+steerer.cached_results
+```
 
-steerer.sweep_linear_discriminant_analysis(save_dir="analysis") # Recursively runs through all the layers and identifies discriminative axis, saves responses to a folder called "analysis"
-
-steerer.cached_results 
-
-"""
-Returns a list of result dictionaries
-
+Cached results looks likes: 
+```python
 {
-    "layer": layer, # Layer number 
+    "layer": layer,  # Layer number
     "params": {
-        "projected": Projecting activations on to the discriminative axis v @ X 
-        "coeffs": The steering vector, v
-        "coeff_norm": Euclidean norm of the steering vector, |v|
-        "predictions": Model predictions of the classes when projected 
+        "projected": Projecting activations onto the discriminative axis v @ X,
+        "coeffs": The steering vector, v,
+        "coeff_norm": Euclidean norm of the steering vector, |v|,
+        "predictions": Model predictions of the classes when projected
     },
-    "explained_variance": Explained variance 
+    "explained_variance": Explained variance,
     "accuracy": accuracy_score(y_true, y_pred),
     "confusion_matrix": confusion_matrix(y_true, y_pred),
-    "classification_report": classification_report(y_true, y_pred) in a dictionary format,
-
+    "classification_report": classification_report(y_true, y_pred) in dictionary format
 }
-"""
 ```
 
-```math
-
-
+```python
 visualizer = DiscriminativeVisualizer(steerer=steerer)
 label_dict = {0: "Negative", 1: "Positive"}
-visualizer.plot_discriminative_projections(
-    plot_title="Layerwise Discriminative Projections", # plot title 
-    label_dict=label_dict, #label dictionary 
-    alpha=0.85 #point color 
-) ## Projects activation onto discriminative axis and plots overlaid a distribution over so you can visualize which layer is maximally performant for discriminating features 
 
+visualizer.plot_discriminative_projections(
+    plot_title="Layerwise Discriminative Projections",
+    label_dict=label_dict,
+    alpha=0.85  # scatter point transparency
+)
 ```
-![Layerwise Discriminative Projection][asset/demo_image/example_projections.png]
+Visualizer projects activation onto discriminative axis and plots overlaid a distribution over so you can visualize which layer is maximally performant for discriminating features 
+
+![Layerwise Discriminative Projection][assets/demo_image/example_projections.png]
 
 ## Mathematic explanation 
 
