@@ -14,6 +14,10 @@ from transformer_lens.hook_points import HookPoint
 
 import matplotlib.pyplot as plt 
 import seaborn as sns
+from math import ceil 
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+
 
 
 class DiscriminativeSteerer:
@@ -278,18 +282,15 @@ class DiscriminativeVisualizer:
         self.steerer = steerer
         self.layers_to_visualize = layers_to_visualize 
         
-        self._compute_projected_vector()
+        self._deserialize_cached_results()
         
         
-    @property 
     def _deserialize_cached_results(self): 
         with open(self.steerer.file_path, "rb") as f: 
             self.results = pickle.load(f)
         return self.results 
     
-    
-    
-    def plot_1d_layerwise_with_distribution(layer_to_projected: Dict[int, np.ndarray],
+    def plot_1d_layerwise_with_distribution(self,layer_to_projected: Dict[int, np.ndarray],
                                             labels: np.ndarray,
                                             plot_title: str,
                                             label_dict: Optional[Dict[int, str]] = None,
@@ -309,22 +310,40 @@ class DiscriminativeVisualizer:
             jitter: vertical jitter for scatter
         """
 
-        layers = sorted(layer_to_projected.keys())
+        layers = layer_to_projected.keys()
         n_layers = len(layers)
+        n_cols = 2
+        n_rows = ceil(n_layers / n_cols)
         classes = np.unique(labels)
         colors = sns.color_palette("tab10", n_colors=len(classes))
 
-        fig, axes = plt.subplots(
-            n_layers, 1,
-            figsize=(8, 1.2 * n_layers),
-            sharex=True
-        )
-
-        if n_layers == 1:
-            axes = [axes]
+        fig, axes = plt.subplots(nrows=n_layers//2, 
+                                 ncols=2,
+                                 figsize=(8, 0.7 * n_layers),
+                                 sharex=True,
+                                 gridspec_kw={'hspace': 0.3, 'wspace': 0.2}  )
+        
+        axes = axes.flatten()
 
         for ax, layer in zip(axes, layers):
-            x = layer_to_projected[layer].squeeze()
+            x = layer_to_projected[layer]
+            if not isinstance(x, (np.ndarray, list)):
+                print(f"Skipping layer {layer}: not numeric")
+                ax.set_yticks([])
+                ax.set_ylim(0, 0.8)
+                ax.spines["top"].set_visible(False)
+                ax.spines["right"].set_visible(False)
+                ax.spines["left"].set_visible(False)
+                ax.set_ylabel(f"{layer}", rotation=0, labelpad=25, fontsize=9)
+                ax.text(0.5, 0.5, "(not visualizable)", 
+                        horizontalalignment='center', 
+                        verticalalignment='center', 
+                        transform=ax.transAxes,  
+                        fontsize=8,
+                        color='gray')
+                continue
+
+            x = x.squeeze()
 
             for i, cls in enumerate(classes):
                 mask = labels == cls
@@ -337,30 +356,23 @@ class DiscriminativeVisualizer:
                            color=colors[i],
                            label=label_dict.get(cls, cls) if label_dict else cls)
 
-                sns.kdeplot(
-                    x=x[mask],
-                    ax=ax,
-                    bw_adjust=0.5,
-                    clip=(x.min(), x.max()),
-                    fill=True,
-                    alpha=0.15,
-                    color=colors[i],
-                    linewidth=0
-                )
+                sns.kdeplot(x=x[mask], ax=ax,bw_adjust=0.75, clip=(x.min(), x.max()),fill=True, alpha=0.15, color=colors[i],linewidth=0)
 
             ax.set_yticks([])
-            ax.set_ylabel(f"L{layer}", rotation=0, labelpad=25, fontsize=9)
+            ax.set_ylim(0, 0.8)
+            ax.set_ylabel(f"{layer}", rotation=0, labelpad=15, fontsize=7)
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
             ax.spines["left"].set_visible(False)
 
-        axes[-1].set_xlabel("LDA projection", fontsize=10)
-        axes[-1].tick_params(axis="x", length=3)
+        for j in range(len(layers), len(axes)):
+            axes[j].axis("off")
 
         if label_dict:
             axes[0].legend(frameon=False,loc="upper right",fontsize=8)
 
-        fig.suptitle(plot_title, fontsize=12, y=0.995)
+        fig.suptitle(plot_title)
+        fig.subplots_adjust(top=0.95)
         plt.tight_layout()
         plt.show()
         
@@ -382,7 +394,7 @@ class DiscriminativeVisualizer:
         # layers_to_project: { 
         #  'layer_idx': projected matrix }
         
-        self.plot_1d_layerwise_with_distribution(layers_to_project=layers_to_project,
+        self.plot_1d_layerwise_with_distribution(layer_to_projected=layers_to_project,
                                                  labels=labels,
                                                  plot_title=plot_title, 
                                                  label_dict=label_dict, 
@@ -398,8 +410,6 @@ class DiscriminativeVisualizer:
         Creates subplots visualizations of head-wise loss of discriminative signals 
         under representational ablation. Note that for this method we are not guaranteeing
         causal ablation. 
-        
-        
         """
             
         
