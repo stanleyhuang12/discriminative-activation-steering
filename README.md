@@ -91,7 +91,7 @@ visualizer.plot_discriminative_projections(
 ```
 Visualizer projects activation onto discriminative axis and plots overlaid a distribution over so you can visualize which layer is maximally performant for discriminating features 
 
-![Layerwise Discriminative Projection][assets/demo_image/example_projections.png]
+![Layerwise Discriminative Projection](assets/demo_image/example_projections.png)
 
 ## Mathematic explanation 
 
