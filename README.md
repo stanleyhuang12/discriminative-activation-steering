@@ -10,7 +10,7 @@ One challenge with this is that probe models are highly overparameterized and ca
 
 Activation editing could represent a powerful, minimally-invasive, and computationally efficient method to shift model responses towards desirable behavioral dynamics.
 
-However, as Tan et al suggests, there are a few critical  challenges. 
+However, as Tan et al [https://arxiv.org/pdf/2407.12404] suggests, there are a few critical  challenges. 
 
 * In-distribution steering: steering is highly dependent on the variance of the input features 
 * Out-of-distribution steering: activation editing shows some level of generalizability, but some features are resistant to the effects of steering
@@ -19,7 +19,7 @@ A model's steerability bias (introduced by Tan et al) is highly dependent on the
 
 This idea motivated my current work: 
 
-While these approaches are effective, they are **variance-agnostic**: they do not account for how much activations fluctuate within each class. This can limit robustness, particularly for out-of-distribution inputs.
+While these approaches are effective, they are **variance-agnostic**: they do not account for how much activations fluctuate within each class. This can limit robustness, particularly for out-of-distribution inputs. We want to ensure that when our activations are projected by the constructed steer vector that it minimizes the within-class variance (adjusting for spurious features)! Furthermore, that the projection finds a maximally discriminative axis which ideally encodes the relevant dimension. 
 
 ## Modules 
 
@@ -29,7 +29,6 @@ While these approaches are effective, they are **variance-agnostic**: they do no
 ## TO DO 
 
 - [X] Read up on transformer_lens library for activation caching 
-- [X] 
 - [X] Write and go through end-to-end mathematical derivation of Fisher criterion to closed form solution
 - [X] Write initial modules for Steerer and Visualizer
 - [X] Run the pipeline to ensure it works and debug errors 
