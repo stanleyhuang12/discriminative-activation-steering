@@ -45,16 +45,19 @@ where $v$ is the projection direction, $μ_{k}$ is the mean of class k, $x_{n}$ 
 
 ### Formulate problem as a generalized eigenvalue problem
 
+Maximizing the Rayleigh quotient leads to a generalized eigenvalue problem:
+
 ```math
-\text{Maximizing the Rayleigh quotient leads to a generalized eigenvalue problem:} S_b \mathbf{v} = \lambda S_w \mathbf{v}
+S_b \mathbf{v} = \lambda S_w \mathbf{v}
 ```
 
 λ is the eigenvalue (the optimal Rayleigh quotient). v is the eigenvector corresponding to the maximum separation direction. The lambda also gives us a nice value to describe the discriminability of the class relative to the noise within the classes. This could be useful perhaps when we ablate the residual stream and see the respective impact on lambda (i.e., how does it affect the relative discriminability with respects to input variance). 
 
 ### Closed-form solution for binary classes
 
+For K = 2, the solution simplifies to:
 ```math 
-\text{For K = 2, the solution simplifies to:} \mathbf{v}_{\text{Fisher}} = S_w^{-1} (\mu_1 - \mu_2)
+ \mathbf{v}_{\text{Fisher}} = S_w^{-1} (\mu_1 - \mu_2)
 $\mathbf{v}_{\text{Fisher}} \propto \mathbf{S}_w^{-1} (\mu_1 - \mu_0)$
 
 ```
