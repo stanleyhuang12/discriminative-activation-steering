@@ -21,15 +21,15 @@ This idea motivated my current work:
 
 While these approaches are effective, they are **variance-agnostic**: they do not account for how much activations fluctuate within each class. This can limit robustness, particularly for out-of-distribution inputs.
 
-> The **Fisher criterion** provides a principled, variance-aware approach to identify discriminative directions. It selects a vector \( \mathbf{v} \) that **maximizes the separation between class means relative to within-class variance**:
+The **Fisher criterion** provides a principled, variance-aware approach to identify discriminative directions. It selects a vector \( \mathbf{v} \) that **maximizes the separation between class means relative to within-class variance**:
 
-\mathbf{v}_{\text{Fisher}} \propto \mathbf{S}_w^{-1} (\mu_1 - \mu_0)
+$'\mathbf{v}_{\text{Fisher}} \propto \mathbf{S}_w^{-1} (\mu_1 - \mu_0)$
 
 
-- \mu_1, \mu_0 \ are the class-specific mean activations,  
+- $'\mu_1'$, $'\mu_0 \'$ are the class-specific mean activations,  
 - \mathbf{S}_w  is the within-class covariance matrix of activations.
 
-Intuitively, the objective of the Fisher criterion is to find a \[w\] direction in the feature such that the projected class means are as far apart and the within-class variance is as small as possible. Given that the Fisher criterion minimizes within-class variance, this could improve robustness especially for both in-distribution and out-of-distribution steering. Moreover, this criterion enables us to downweight directions of the model activations varies quite a lot because they are noisy for steering.This align with Tan et al.'s observation that some features are resistant to steering because high within-class variance diminshes the effect of a linear intervention. 
+Intuitively, the objective of the Fisher criterion is to find a $'\[w\]'$ direction in the feature such that the projected class means are as far apart and the within-class variance is as small as possible. Given that the Fisher criterion minimizes within-class variance, this could improve robustness especially for both in-distribution and out-of-distribution steering. Moreover, this criterion enables us to downweight directions of the model activations varies quite a lot because they are noisy for steering.This align with Tan et al.'s observation that some features are resistant to steering because high within-class variance diminshes the effect of a linear intervention. 
 
 
 
