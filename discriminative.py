@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Literal, Union
+from typing import List, Dict, Any, Literal, Union, Optional
 import numpy as np
 import pandas as pd
 import torch
@@ -137,9 +137,12 @@ class DiscriminativeSteerer:
 
             return {
                 "layer": layer,
-                "projected": X_proj,
-                "coeffs": lda.coef_,
-                "coeff_norm": np.linalg.norm(lda.coef_),
+                "params": {
+                    "projected": X_proj, 
+                    "coeffs": lda.coef_, 
+                    "coeff_norm": np.linalg.norm(lda.coef_), 
+                    "predictions": y_pred,
+                },
                 "explained_variance": lda.explained_variance_ratio_,
                 "accuracy": accuracy_score(self.y, y_pred),
                 "confusion_matrix": confusion_matrix(self.y, y_pred),
@@ -150,7 +153,12 @@ class DiscriminativeSteerer:
             print(f"Layer {layer} failed: {e}")
             return {
                 "layer": layer,
-                "projected": "error",
+                "params": {
+                    "projected": "error", 
+                    "coeffs": "error", 
+                    "coeff_norm": 0.0, 
+                    "predictions": "error",
+                },
                 "coeffs": "error",
                 "coeff_norm": 0.0,
                 "explained_variance": "error",
@@ -271,26 +279,24 @@ class DiscriminativeVisualizer:
         
         self._compute_projected_vector()
         
-    
-    def _compute_projected_vector(self): 
         
-        steer_vector = self.steerer._retrieve_steering_vector(explicit_layers=self.layers_to_visualize)
-        self.proj_vector = self.steer.X @ steer_vector 
-            # X is m rows, n features @ n_features x 1 = (m_rows x 1)
-        return self.proj_vector 
+    @property 
+    def _deserialize_cached_results(self): 
+        with open(self.steerer.file_path, "rb") as f: 
+            self.results = pickle.load(f)
+        return self.results 
     
-
-    def plot_linear_discriminants(projected_data: np.ndarray, 
-                                labels: np.ndarray,
-                                plot_title: str,
-                                label_dict: Optional[Dict[int, str]] = None,
-                                alpha: float = 0.85):
+    def _plot_linear_discriminants(self, projected_data: np.ndarray, 
+                                  labels: np.ndarray,
+                                  plot_title: str,
+                                  label_dict: Optional[Dict[int, str]] = None,
+                                  alpha: float = 0.85):
         """
         Plot LDA-projected data, color by original class labels.
 
         Args:
             projected_data: (N, D) array from lda.transform(X)
-            labels: (N,) array of class labels (e.g. 0 / 1)
+            labels: (N,) array of class labels (e.g. 0 / 1).. Maximum of three class is supported (3d visualization of a 2d subspace) but may need to debug code
             plot_title: Title of the plot
             label_dict: Optional mapping {0: "negative", 1: "positive"}
             alpha: Scatter transparency
@@ -323,7 +329,6 @@ class DiscriminativeVisualizer:
             plt.yticks([])
             plt.xlabel("Linear Discriminant 1")
 
-
         else:
             for label in unique_labels:
                 mask = labels == label
@@ -341,6 +346,31 @@ class DiscriminativeVisualizer:
         plt.grid(False)
         plt.tight_layout()
         plt.show()
+        
+    
+    def plot_discriminative_projections(self, plot_title: str, label_dict: any): 
+        self._deserialize_cached_results()
+        
+        projected = self.results[0]['params']['projected']
+        labels = self.steerer.y
+        
+        self._plot_linear_discriminants(projected_data=projected, 
+                                        labels=labels,
+                                        plot_title=plot_title, 
+                                        label_dict=label_dict)
+        
+        
+        return None 
+    
+
             
+    def plot_diagnostic_ablations(): 
+        """
+        Creates subplots visualizations of head-wise loss of discriminative signals 
+        under representational ablation. Note that for this method we are not guaranteeing
+        causal ablation. 
+        
+        
+        """
             
         
