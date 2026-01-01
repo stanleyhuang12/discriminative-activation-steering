@@ -21,8 +21,15 @@ This idea motivated my current work:
 
 While these approaches are effective, they are **variance-agnostic**: they do not account for how much activations fluctuate within each class. This can limit robustness, particularly for out-of-distribution inputs.
 
-The **Fisher criterion** provides a principled, variance-aware approach to identify discriminative directions. It selects a vector $\( \mathbf{v} \)$ that **maximizes the separation between class means relative to within-class variance**:
+## Modules 
 
+- **DiscriminativeSteerer:** Apply steering vectors along discriminative axes to modify model activations.
+- **DiscriminativeVisualizer:** Visualize projections of activations, layer-wise impact, and class separability.
+
+
+## Mathematic explanation 
+
+The **Fisher criterion** provides a principled, variance-aware approach to identify discriminative directions. It selects a vector $\( \mathbf{v} \)$ that **maximizes the separation between class means relative to within-class variance**:
 
 ### Define the Fisher criterion:
 
@@ -60,7 +67,7 @@ For K = 2, the solution simplifies to:
  \mathbf{v}_{\text{Fisher}} = S_w^{-1} (\mu_1 - \mu_2)
 ```
 ```math
-\mathbf{v}_{\text{Fisher}} \propto \mathbf{S}_w^{-1} (\mu_1 - \mu_0)$
+\mathbf{v}_{\text{Fisher}} \propto \mathbf{S}_w^{-1} (\mu_1 - \mu_0)
 ```
 - $\mu_1$, mean activations of the first class
 - $\mu_0$ mean activations of the second class 
@@ -69,11 +76,18 @@ For K = 2, the solution simplifies to:
 
 Intuitively, the objective of the Fisher criterion is to find a $v$ direction in the feature such that the projected class means are as far apart and the within-class variance is as small as possible. Given that the Fisher criterion minimizes within-class variance, this could improve robustness especially for both in-distribution and out-of-distribution steering. Moreover, this criterion enables us to downweight directions of the model activations varies quite a lot because they are noisy for steering.This align with Tan et al.'s observation that some features are resistant to steering because high within-class variance diminshes the effect of a linear intervention. 
 
+There are many packages that already do this. For instance, the Linear Discriminant Analysis package in scikit-learn which we use. 
+
+### $v$ as the basis for a SV 
+
+The vector, $v$, is a maximally discriminative axis that allows us to seprate not just contrastive examples but separate features or behavior (think honesty and sycophancy), while adjusting for and minimizing within-class variance. This discriminative axis forms the basis of our steering vector. 
+
+There are likely different ways of extending this: 
+
+- **multidimensional steering**: Expanding work towards multidimensional steering by find a $k_classes-1$ discriminative hyperplane 
+
+- **contrastive features**: - **Contrastive features:** Discriminative steering could potentially be extended to a $k_classes \times 2$ framework, where we compute orthogonal steering axes for each class pair. This would allow fine-grained control over multiple behavioral features simultaneously.
+scriminative steering could potentially allow for a $num_classes x 2$ steering if we find ways to further 
 
 
-
-
-
-- **DiscriminativeSteerer:** Apply steering vectors along discriminative axes to modify model activations.
-- **DiscriminativeVisualizer:** Visualize projections of activations, layer-wise impact, and class separability.
 
