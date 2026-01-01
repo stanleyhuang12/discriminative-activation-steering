@@ -10,7 +10,7 @@ One challenge with this is that probe models are highly overparameterized and ca
 
 Activation editing could represent a powerful, minimally-invasive, and computationally efficient method to shift model responses towards desirable behavioral dynamics.
 
-###### However, as Tan et al suggests, there are a few critical  challenges. 
+However, as Tan et al suggests, there are a few critical  challenges. 
 
 * In-distribution steering: steering is highly dependent on the variance of the input features 
 * Out-of-distribution steering: activation editing shows some level of generalizability, but some features are resistant to the effects of steering
@@ -26,6 +26,17 @@ While these approaches are effective, they are **variance-agnostic**: they do no
 - **DiscriminativeSteerer:** Apply steering vectors along discriminative axes to modify model activations.
 - **DiscriminativeVisualizer:** Visualize projections of activations, layer-wise impact, and class separability.
 
+## TO DO 
+
+- [X] Read up on transformer_lens library for activation caching 
+- [X] 
+- [X] Write and go through end-to-end mathematical derivation of Fisher criterion to closed form solution
+- [X] Write initial modules for Steerer and Visualizer
+- [X] Run the pipeline to ensure it works and debug errors 
+- [ ] Finish writing modules for Steerer and Visualizer 
+    - [ ] Define a function to try a naive representational ablations
+    - [ ] Compute the eigenvalue as a metric for relative discriminability 
+    - [ ] Define function to decode the responses for ood examples 
 
 ## Mathematic explanation 
 
@@ -84,9 +95,9 @@ The vector, $v$, is a maximally discriminative axis that allows us to seprate no
 
 There are likely different ways of extending this: 
 
-- **multidimensional steering**: Expanding work towards multidimensional steering by find a $k_classes-1$ discriminative hyperplane 
+- **multidimensional steering**: Expanding work towards multidimensional steering by find a $k_\classes-1$ discriminative hyperplane 
 
-- **contrastive features**: - **Contrastive features:** Discriminative steering could potentially be extended to a $k_classes \times 2$ framework, where we compute orthogonal steering axes for each class pair. This would allow fine-grained control over multiple behavioral features simultaneously.
+- **contrastive features**: - **Contrastive features:** Discriminative steering could potentially be extended to a $k_\classes \times 2$ framework, where we compute orthogonal steering axes for each class pair. This would allow fine-grained control over multiple behavioral features simultaneously.
 scriminative steering could potentially allow for a $num_classes x 2$ steering if we find ways to further 
 
 
