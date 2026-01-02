@@ -19,23 +19,26 @@ df_train = generate_sycophantic_responses_df(df)
 discriminator = DiscriminativeSteerer(model_name='gpt2-small', d_model=768)
 
 # Extracts activations from the prompts 
-discriminator.extract_activations_from_prompts(df=df_train, n_pairs=10)
+discriminator.extract_activations_from_prompts(df=df_train, n_pairs=20)
 
-discriminator.prompts
 
 # Sweeps through the layers to find the best separability 
-res = discriminator._sweep_linear_discriminative_projection(save_dir='discriminant_pre_results')
-
-
-DiscriminativeVisualizer
-
-
-
-
-residual, labels = extract_activations_from_prompts(df_train, n_pairs=1, model="gpt2-small", post_residual_stream_only=True, decompose_residual_stream=False)
-
+res = discriminator.sweep_linear_discriminative_projection(save_dir='discriminant_pre_results')
 visualizer = DiscriminativeVisualizer(steerer=discriminator, 
                                         layers_to_visualize=1)
+
+
+
+visualizer.plot_discriminative_projections(
+    plot_title="GPT2-small layerwise projections help discriminate contrastive features", 
+    label_dict={
+        0: "not sycophantic", 
+        1: "is sycophantic"
+        })
+
+visualizer.plot_discriminability_per_layer(
+    normalize=True
+)
 
 
 import pickle 

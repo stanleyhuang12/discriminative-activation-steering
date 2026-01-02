@@ -261,46 +261,33 @@ class DiscriminativeSteerer:
         self._initialize_perma_hook_model(layer=explicit_layers, steering_vector=steer_vector)
         print(f"Registered a permanent forward hook to {self.model_name} model")
         
-    def _compute_eigenvalues(self, layers): 
-        """
-        Recover the raw eigenvalues from a fitted linear discriminant analysis. The eignevalue is computed as such: 
-        
-        S_b@W = \lambda * S_w@W 
-        \lambda = S_b@W/S_w@W  
-        
-        The eigenvalue or lambda coefficient is also the ratio of projected vector's between-class variance and within-class variance. 
-        While, it is hard to interpret the eigenvalue on its own, it could potentially offer a good metric for relative comparison 
-         
-        Relatively speaking, the higher the eigenvalue, the more robust the discriminative axis. 
-        
-        """
-        
-        projected = self.cached_results[layers]['params']['projected']
-        label = self.y 
-        
-        assert projected.shape[1] == 1, "Only support two a maximum of K=2 classes"
-        
+    def _compute_eigenvalue_from_cache(self, cache):
+        projected = cache["params"]["projected"]
+        label = self.y
+
+        if isinstance(projected, str):
+            return None
+
+        projected = projected.squeeze()
+        assert projected.ndim == 1, "LDA projection should be 1D for 2 classes"
+
         mu0 = projected[label == 0].mean()
         mu1 = projected[label == 1].mean()
-        
-        var0 = projected[y == 0].var(ddof=1)
-        var1 = projected[y == 1].var(ddof=1)
-       
-        eigenvalue = (mu0 - mu1)**2 / (var0) + (var1)
-        
-        return eigenvalue 
 
-    def _compute_layerwise_eigenvalues(self): 
-        """
-        Computes layerwise eigenvalues. 
-        """
-        
+        var0 = projected[label == 0].var(ddof=1)
+        var1 = projected[label == 1].var(ddof=1)
+
+        eigenvalue = (mu0 - mu1) ** 2 / (var0 + var1 + 1e-8)
+        return float(eigenvalue)
+
+    def _compute_layerwise_eigenvalues(self):
         layer_eigvals = []
-        for cache in self.cached_results: 
-            l = cache['layers']
-            eigvals = self._compute_eigenvalues(l)
-            layer_eigvals.append(eigvals)
-            cache['eigenvalues'] = eigvals
+
+        for cache in self.cached_results:
+            eig = self._compute_eigenvalue_from_cache(cache)
+            cache["eigenvalues"] = eig
+            layer_eigvals.append(eig)
+
         return layer_eigvals
         
     def decode_model_responses(self, prompts, mode: Literal['inference', 'cache', 'hooks']): 
@@ -466,7 +453,7 @@ class DiscriminativeVisualizer:
         if not cached:
             raise ValueError("No cached results available to plot.")
 
-        eigvals = [l.get("eigenvalues") for l in cached]
+        eigvals = self.steerer._compute_layerwise_eigenvalues()
         accuracy = [l.get("accuracy") for l in cached]
         layer_names = [l.get("layer") for l in cached]
 
@@ -486,7 +473,7 @@ class DiscriminativeVisualizer:
 
         plt.figure(figsize=(9, 5))
 
-        plt.plot(layer_names, eigvals, marker="^", markersize=7,linewidth=2, label="Discriminability (Eigenvalue)")
+        plt.plot(layer_names, eigvals, marker="^", markersize=7,linewidth=2, label="Relative \nDiscriminability (Eigenvalue)")
         plt.plot(layer_names, accuracy, marker="o", markersize=6, linewidth=2, label="Accuracy")
 
         plt.xlabel(f"Layers of {self.steerer.model_name}", fontsize=12)
