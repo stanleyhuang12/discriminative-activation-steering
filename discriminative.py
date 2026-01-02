@@ -303,7 +303,7 @@ class DiscriminativeSteerer:
             cache['eigenvalues'] = eigvals
         return layer_eigvals
         
-    def decode_model_responses(self, prompts): 
+    def decode_model_responses(self, prompts, mode: Literal['inference', 'cache', 'hooks']): 
         
         """
         Takes in a list of prompts and performs a forward pass of the model responses, save the resulting answers. 
@@ -311,9 +311,14 @@ class DiscriminativeSteerer:
         
         if self._perma_hook_initialized: print("Running models with registered permanent hooks.")
         
+        if mode == "inference": 
+            with torch.inference_mode():
+                responses = self.model(prompts) 
+                return responses 
         
-        
-        
+        if mode == "cache": 
+            self.model.run_with_cache(prompts)
+            
         
         pass 
 
@@ -341,7 +346,8 @@ class DiscriminativeVisualizer:
             self.results = pickle.load(f)
         return self.results 
     
-    def plot_1d_layerwise_with_distribution(self,layer_to_projected: Dict[int, np.ndarray],
+    def plot_1d_layerwise_with_distribution(self,
+                                            layer_to_projected: Dict[int, np.ndarray],
                                             labels: np.ndarray,
                                             plot_title: str,
                                             label_dict: Optional[Dict[int, str]] = None,
@@ -426,7 +432,6 @@ class DiscriminativeVisualizer:
         fig.subplots_adjust(top=0.95)
         plt.tight_layout()
         plt.show()
-        
     
     def plot_discriminative_projections(self, plot_title: str, label_dict: any, alpha:any=0.85, jitter:any=0.0): 
         self._deserialize_cached_results()
@@ -441,9 +446,7 @@ class DiscriminativeVisualizer:
         
         labels = self.steerer.y
             
-        # Takes the results and parses into a dictionary called 
-        # layers_to_project: { 
-        #  'layer_idx': projected matrix }
+
         
         self.plot_1d_layerwise_with_distribution(layer_to_projected=layers_to_project,
                                                  labels=labels,
@@ -454,9 +457,53 @@ class DiscriminativeVisualizer:
         
         return None 
     
+    def plot_discriminability_per_layer(self, normalize: bool = True):
+        """
+        Plot discriminability metrics (eigenvalues and accuracy) per layer.
+        """
+
+        cached = self.steerer.cached_results
+        if not cached:
+            raise ValueError("No cached results available to plot.")
+
+        eigvals = [l.get("eigenvalues") for l in cached]
+        accuracy = [l.get("accuracy") for l in cached]
+        layer_names = [l.get("layer") for l in cached]
+
+        if all(v is None for v in eigvals) and all(v is None for v in accuracy):
+            raise ValueError("No eigenvalues or accuracy values found in cached results.")
+
+
+        def _normalize(vals):
+            vals = np.array(vals, dtype=float)
+            return (vals - vals.min()) / (vals.max() - vals.min() + 1e-8)
+
+        if normalize:
+            if any(v is not None for v in eigvals):
+                eigvals = _normalize(eigvals)
+            if any(v is not None for v in accuracy):
+                accuracy = _normalize(accuracy)
+
+        plt.figure(figsize=(9, 5))
+
+        plt.plot(layer_names, eigvals, marker="^", markersize=7,linewidth=2, label="Discriminability (Eigenvalue)")
+        plt.plot(layer_names, accuracy, marker="o", markersize=6, linewidth=2, label="Accuracy")
+
+        plt.xlabel(f"Layers of {self.steerer.model_name}", fontsize=12)
+        plt.ylabel("Normalized Value" if normalize else "Value", fontsize=12)
+
+        plt.legend(frameon=False)
+        plt.grid(False)
+
+        plt.tight_layout()
+        plt.xticks(rotation=45, ha="right")
+        plt.tick_params(axis="both", labelsize=10)
+
+        plt.show()
+        
 
             
-    def plot_diagnostic_ablations(): 
+    def plot_diagnostic_ablations(self): 
         """
         Creates subplots visualizations of head-wise loss of discriminative signals 
         under representational ablation. Note that for this method we are not guaranteeing
