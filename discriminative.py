@@ -147,6 +147,7 @@ class DiscriminativeSteerer:
                     "coeffs": lda.coef_, 
                     "coeff_norm": np.linalg.norm(lda.coef_), 
                     "predictions": y_pred,
+                    "scalings_": lda.scalings_
                 },
                 "explained_variance": lda.explained_variance_ratio_,
                 "accuracy": accuracy_score(self.y, y_pred),
@@ -163,6 +164,7 @@ class DiscriminativeSteerer:
                     "coeffs": "error", 
                     "coeff_norm": 0.0, 
                     "predictions": "error",
+                    "scalings_": "error"
                 },
                 "coeffs": "error",
                 "coeff_norm": 0.0,
@@ -172,7 +174,7 @@ class DiscriminativeSteerer:
                 "classification_report": "error",
             }
 
-    def _sweep_linear_discriminative_projection(self,
+    def sweep_linear_discriminative_projection(self,
                                                 save_dir: str,
                                                 rule: Literal['layer', 'coeff_norm', 'explained_variance', 'accuracy'] = "accuracy", 
                                                 positions_to_analyze: int = -1, 
@@ -234,7 +236,7 @@ class DiscriminativeSteerer:
     @property 
     def _compute_discriminative_steering_vector(self, steering_vec: np.ndarray, steering_coeffs: float, normalize: bool = False) -> np.ndarray:
         """
-        Computes an averaged steering vector from contrastive activations.
+        Computes a normalized discriminative steering vector. 
 
         """
 
@@ -245,7 +247,7 @@ class DiscriminativeSteerer:
 
         return steer_vec
     
-    def hook_model_with_discriminative_steer(self, steering_coeffs: float, normalize: bool = False, explicit_layers=None): 
+    def hook_discriminative_steer(self, steering_coeffs: float, normalize: bool = False, explicit_layers=None): 
         """
         Public method to call that permanently hooks the model with a steering vector. 
         """
@@ -259,11 +261,60 @@ class DiscriminativeSteerer:
         self._initialize_perma_hook_model(layer=explicit_layers, steering_vector=steer_vector)
         print(f"Registered a permanent forward hook to {self.model_name} model")
         
-    def decode_model_responses(prompts): 
+    def _compute_eigenvalues(self, layers): 
+        """
+        Recover the raw eigenvalues from a fitted linear discriminant analysis. The eignevalue is computed as such: 
+        
+        S_b@W = \lambda * S_w@W 
+        \lambda = S_b@W/S_w@W  
+        
+        The eigenvalue or lambda coefficient is also the ratio of projected vector's between-class variance and within-class variance. 
+        While, it is hard to interpret the eigenvalue on its own, it could potentially offer a good metric for relative comparison 
+         
+        Relatively speaking, the higher the eigenvalue, the more robust the discriminative axis. 
+        
+        """
+        
+        projected = self.cached_results[layers]['params']['projected']
+        label = self.y 
+        
+        assert projected.shape[1] == 1, "Only support two a maximum of K=2 classes"
+        
+        mu0 = projected[label == 0].mean()
+        mu1 = projected[label == 1].mean()
+        
+        var0 = projected[y == 0].var(ddof=1)
+        var1 = projected[y == 1].var(ddof=1)
+       
+        eigenvalue = (mu0 - mu1)**2 / (var0) + (var1)
+        
+        return eigenvalue 
+
+    def _compute_layerwise_eigenvalues(self): 
+        """
+        Computes layerwise eigenvalues. 
+        """
+        
+        layer_eigvals = []
+        for cache in self.cached_results: 
+            l = cache['layers']
+            eigvals = self._compute_eigenvalues(l)
+            layer_eigvals.append(eigvals)
+            cache['eigenvalues'] = eigvals
+        return layer_eigvals
+        
+    def decode_model_responses(self, prompts): 
         
         """
         Takes in a list of prompts and performs a forward pass of the model responses, save the resulting answers. 
         """
+        
+        if self._perma_hook_initialized: print("Running models with registered permanent hooks.")
+        
+        
+        
+        
+        
         pass 
 
 
