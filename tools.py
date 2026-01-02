@@ -12,7 +12,6 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 import os 
 
 
-
 def generate_sycophantic_responses_df(df):
     """
     Generate the dataset for forward pass and activation storing.
