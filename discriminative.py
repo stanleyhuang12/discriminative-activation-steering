@@ -19,7 +19,6 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
-
 class DiscriminativeSteerer:
     """
     End-to-end class for:
@@ -218,7 +217,7 @@ class DiscriminativeSteerer:
         if self.cached_results: 
             if explicit_layers: 
                 result_dict = [res for res in self.cached_results if res['layer'] == explicit_layers][0]
-                coeffs = result_dict['coeffs']
+                coeffs = result_dict['params']['coeffs']
             else: 
                 print("Retrieving the projection vector from the best accuracy. Only method supported for now.")
                 self.cached_results.sort(key=lambda x: x["accuracy"], reverse=True)
@@ -228,9 +227,9 @@ class DiscriminativeSteerer:
             with open(file_path, "rb") as f: 
                 res = pickle.load(f)
                 if explicit_layers: 
-                    coeffs = res[explicit_layers]['coeffs']
+                    coeffs = res[explicit_layers]['params']['coeffs']
                 else: 
-                    coeffs = res[0]['coeffs']
+                    coeffs = res[0]['params']['coeffs']
         return coeffs 
         
     @property 
@@ -513,4 +512,5 @@ class DiscriminativeVisualizer:
         causal ablation. 
         """
             
+        pass 
         
