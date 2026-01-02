@@ -34,7 +34,7 @@ While these approaches are effective, they are **variance-agnostic**: they do no
 - [X] Run the pipeline to ensure it works and debug errors 
 - [ ] Finish writing modules for Steerer and Visualizer 
     - [ ] Define a function to try a naive representational ablations
-    - [ ] Compute the eigenvalue as a metric for relative discriminability 
+    - [X] Compute the eigenvalue as a metric for relative discriminability 
     - [ ] Define function to decode the responses for ood examples 
 
 
@@ -92,6 +92,12 @@ visualizer.plot_discriminative_projections(
 Visualizer projects activation onto discriminative axis and plots overlaid a distribution over so you can visualize which layer is maximally performant for discriminating features 
 
 ![Layerwise Discriminative Projection](assets/demo_image/example_projections.png)
+![normalized_eigenvalue_accuracy_plot](assets/demo_image/normalized_eigenvalues_plot.png)
+
+Often probe models have high accuracy for all the layers. It is possible that this discriminative projection also can perform high accuracy for all the layers, which is why the eigenvalue may be a useful diagnostic metric to check which layer has best separability. 
+
+Note that the eigenvalue is computed through sum of between-class variance / sum of within-class variance. Intuitively, this means we want to find a plane or hyperplane to project all our contrastive examples such that it maximizes the separation of the classes and ensures the examples from the same class are as close together as possible. We can see that while many of the layers are accurate for use to classify or identify linear directions of sycophancy, layer 3 actually has the highest eigenvalue. 
+
 
 ## Mathematic explanation 
 

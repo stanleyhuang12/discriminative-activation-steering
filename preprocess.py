@@ -37,8 +37,20 @@ visualizer.plot_discriminative_projections(
         })
 
 visualizer.plot_discriminability_per_layer(
+    normalize_eigenvalues=True
+    
+)
+
+visualizer.plot_discriminability_per_layer(
+    normalize=False
+)
+visualizer.plot_discriminability_per_layer(
     normalize=True
 )
+for item in res: 
+    print(item['layer'])
+    print(item['eigenvalues'])
+    print(item['accuracy'])
 
 
 import pickle 

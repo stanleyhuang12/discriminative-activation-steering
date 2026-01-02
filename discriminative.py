@@ -444,9 +444,10 @@ class DiscriminativeVisualizer:
         
         return None 
     
-    def plot_discriminability_per_layer(self, normalize: bool = True):
+    def plot_discriminability_per_layer(self, normalize_eigenvalues: bool = True):
         """
         Plot discriminability metrics (eigenvalues and accuracy) per layer.
+        Supports normalization of eigenvalues.
         """
 
         cached = self.steerer.cached_results
@@ -454,42 +455,57 @@ class DiscriminativeVisualizer:
             raise ValueError("No cached results available to plot.")
 
         eigvals = self.steerer._compute_layerwise_eigenvalues()
-        accuracy = [l.get("accuracy") for l in cached]
-        layer_names = [l.get("layer") for l in cached]
+        cached.sort(key=lambda x: x['layer'])
+
+        layers = []
+        eigenvalues = []
+        accuracy = []
+
+        for cache, eig in zip(cached, eigvals):
+            if eig is None or cache.get("accuracy") is None:
+                continue
+            layers.append(cache["layer"])
+            eigenvalues.append(eig)
+            accuracy.append(cache["accuracy"])
 
         if all(v is None for v in eigvals) and all(v is None for v in accuracy):
             raise ValueError("No eigenvalues or accuracy values found in cached results.")
+        
+        if normalize_eigenvalues:
+            vals = np.array(eigenvalues, dtype=float)
+            eigenvalues = (vals - vals.min()) / (vals.max() - vals.min() + 1e-8)
 
+        eigenvalues = [np.nan if v is None else v for v in eigenvalues]
+        accuracy = [np.nan if v is None else v for v in accuracy]
 
-        def _normalize(vals):
-            vals = np.array(vals, dtype=float)
-            return (vals - vals.min()) / (vals.max() - vals.min() + 1e-8)
-
-        if normalize:
-            if any(v is not None for v in eigvals):
-                eigvals = _normalize(eigvals)
-            if any(v is not None for v in accuracy):
-                accuracy = _normalize(accuracy)
-
-        plt.figure(figsize=(9, 5))
-
-        plt.plot(layer_names, eigvals, marker="^", markersize=7,linewidth=2, label="Relative \nDiscriminability (Eigenvalue)")
-        plt.plot(layer_names, accuracy, marker="o", markersize=6, linewidth=2, label="Accuracy")
+        # Plot
+        plt.plot(
+            layers,
+            eigenvalues,
+            marker="^",
+            markersize=7,
+            linewidth=2,
+            label="Relative \nDiscriminability (Eigenvalue)" if not normalize_eigenvalues else "Normalized Discriminability (Eigenvalues)"
+        )
+        plt.plot(
+            layers,
+            accuracy,
+            marker="o",
+            markersize=6,
+            linewidth=2,
+            label="Accuracy"
+        )
 
         plt.xlabel(f"Layers of {self.steerer.model_name}", fontsize=12)
-        plt.ylabel("Normalized Value" if normalize else "Value", fontsize=12)
-
+        plt.ylabel("Value", fontsize=12)
         plt.legend(frameon=False)
         plt.grid(False)
-
         plt.tight_layout()
         plt.xticks(rotation=45, ha="right")
         plt.tick_params(axis="both", labelsize=10)
-
         plt.show()
-        
-
             
+
     def plot_diagnostic_ablations(self): 
         """
         Creates subplots visualizations of head-wise loss of discriminative signals 
