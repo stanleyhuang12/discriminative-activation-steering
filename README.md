@@ -172,8 +172,8 @@ Given:
 - intervention strength \( \alpha \in \mathbb{R} \)
 
 we apply the steering intervention:
-```math
 ## Layer Selection Criterion
+```math
 
 \[
 \ell^\star
@@ -181,9 +181,10 @@ we apply the steering intervention:
 \arg\max_{\ell}
 \lambda_{\max}^{(\ell)}
 \]
-
+```
 ## Steering Intervention
 
+```math
 \[
 a^{(\ell^\star)}_{\text{new}}
 =
