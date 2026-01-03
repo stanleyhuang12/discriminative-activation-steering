@@ -167,9 +167,9 @@ There are many packages that already do this. For instance, the Linear Discrimin
 
 
 Given:
-- activation vector \( a \in \mathbb{R}^d \)
-- Fisher discriminant direction \( v_{\text{Fisher}} \)
-- intervention strength \( \alpha \in \mathbb{R} \)
+- activation vector $a$ $\in$ $\mathbb{R}^d$
+- Fisher discriminant direction $v_{\text{Fisher}}$
+- intervention strength $\alpha \in \mathbb{R} $
 
 we apply the steering intervention:
 ## Layer Selection Criterion
