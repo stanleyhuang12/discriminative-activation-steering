@@ -175,21 +175,20 @@ we apply the steering intervention:
 ## Layer Selection Criterion
 ```math
 
-\[
 \ell^\star
 =
 \arg\max_{\ell}
 \lambda_{\max}^{(\ell)}
-\]
+
 ```
 ## Steering Intervention
 
 ```math
-\[
+
 a^{(\ell^\star)}_{\text{new}}
 =
 a^{(\ell^\star)} + \alpha \, v_{\text{Fisher}}^{(\ell^\star)}
-\]
+
 ```
 
 
