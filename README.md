@@ -165,6 +165,34 @@ There are many packages that already do this. For instance, the Linear Discrimin
 
 ### $v$ as the basis for a SV 
 
+
+Given:
+- activation vector \( a \in \mathbb{R}^d \)
+- Fisher discriminant direction \( v_{\text{Fisher}} \)
+- intervention strength \( \alpha \in \mathbb{R} \)
+
+we apply the steering intervention:
+```math
+## Layer Selection Criterion
+
+\[
+\ell^\star
+=
+\arg\max_{\ell}
+\lambda_{\max}^{(\ell)}
+\]
+
+## Steering Intervention
+
+\[
+a^{(\ell^\star)}_{\text{new}}
+=
+a^{(\ell^\star)} + \alpha \, v_{\text{Fisher}}^{(\ell^\star)}
+\]
+```
+
+
+
 The vector, $v$, is a maximally discriminative axis that allows us to seprate not just contrastive examples but separate features or behavior (think honesty and sycophancy), while adjusting for and minimizing within-class variance. This discriminative axis forms the basis of our steering vector. 
 
 There are likely different ways of extending this: 
