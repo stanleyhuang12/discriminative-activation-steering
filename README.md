@@ -197,9 +197,9 @@ The vector, $v$, is a maximally discriminative axis that allows us to seprate no
 
 There are likely different ways of extending this: 
 
-- **multidimensional steering**: Expanding work towards multidimensional steering by find a $k_\classes-1$ discriminative hyperplane 
+- **multidimensional steering**: Expanding work towards multidimensional steering by find a $k$_classes$-1$ discriminative hyperplane 
 
-- **contrastive features**: - **Contrastive features:** Discriminative steering could potentially be extended to a $k_\classes \times 2$ framework, where we compute orthogonal steering axes for each class pair. This would allow fine-grained control over multiple behavioral features simultaneously.
+- **contrastive features**: - **Contrastive features:** Discriminative steering could potentially be extended to a $k$_classes $\times 2$ framework, where we compute orthogonal steering axes for each class pair. This would allow fine-grained control over multiple behavioral features simultaneously.
 scriminative steering could potentially allow for a $num_classes x 2$ steering if we find ways to further 
 
 
