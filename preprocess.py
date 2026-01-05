@@ -15,7 +15,7 @@ df = process_raw_json_datasets(file_path=generate_path)
 # Initializes discriminator object 
 discriminator = DiscriminativeSteerer(model_name='gpt2-small')
 # Extracts activations from the prompts 
-discriminator.extract_activations_from_prompts(df=df, n_pairs=10)
+discriminator.extract_activations_from_prompts(df=df, n_pairs=30)
 
 # Sweeps through the layers to find the best separability 
 res = discriminator.sweep_linear_discriminative_projection(save_dir='discriminant_pre_results')
@@ -32,7 +32,7 @@ visualizer.plot_discriminative_projections(
         })
 
 visualizer.plot_discriminability_per_layer(
-    normalize_eigenvalues=False
+    normalize_eigenvalues=True
 )
 
 evaluator = DiscriminatorEvaluator(steerer=discriminator)
