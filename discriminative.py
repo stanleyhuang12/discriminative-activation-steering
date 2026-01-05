@@ -19,18 +19,39 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
+
+class ContrastiveSteerer: 
+    def __init__(self, model_name: str, model: Optional[HookedTransformer] = None ): 
+        self.model_name = model_name 
+        if model:
+            self.model = model
+        else: 
+            HookedTransformer.from_pretrained(model_name)
+        
+        self._set_reproducibility()
+    
+    def _set_reproducibility(self, seed:int = 821): 
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        
+    def _compute_contrastive_steering_vector(self, pos, neg): 
+        return (pos - neg)
+    
+    def _average_contrastive_steering_vector(self, vec): 
+        return np.mean(vec, axis=1)
+        
+        
+
 class DiscriminativeSteerer:
     """
     End-to-end class for:
-      1) Extracting contrastive residual streams
-      2) Computing difference / steering vectors
-      3) Performing linear discriminative projections (LDA)
+      1) Extracting contrastive or different classes' residual streams
+      2) Find the Fisher-maximizing critierion vector as the steering vector 
       4) Injecting steering vectors via permanent hooks
     """
 
-    def __init__(self, model_name: str, d_model: int = 768):
+    def __init__(self, model_name: str):
         self.model_name = model_name
-        self.d_model = d_model
         self.model = HookedTransformer.from_pretrained(model_name=model_name)
         
         self._perma_hook_initialized = False 
@@ -231,6 +252,7 @@ class DiscriminativeSteerer:
                 else: 
                     coeffs = res[0]['params']['coeffs']
         return coeffs 
+    
         
     @property 
     def _compute_discriminative_steering_vector(self, steering_vec: np.ndarray, steering_coeffs: float, normalize: bool = False) -> np.ndarray:
@@ -513,4 +535,7 @@ class DiscriminativeVisualizer:
         """
             
         pass 
+    
+    
+
         
