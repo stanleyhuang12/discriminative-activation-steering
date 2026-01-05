@@ -36,10 +36,12 @@ visualizer.plot_discriminability_per_layer(
 )
 
 evaluator = DiscriminatorEvaluator(steerer=discriminator)
+
 evaluator.compute_layerwise_cossim(metrics='caa')
 evaluator.compute_layerwise_cossim(metrics='params')
 evaluator.compute_layerwise_cossim(metrics='both')
 
+evaluator.plot_norms_by_layer()
 
 type(discriminator.cached_results[0]['caa']['mean_diff'])
 type(discriminator.cached_results[0]['params']['coeffs'])\

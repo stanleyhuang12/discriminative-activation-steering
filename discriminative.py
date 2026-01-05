@@ -92,7 +92,7 @@ class DiscriminativeSteerer:
 
         return pos.detach().cpu(), neg.detach().cpu()
     
-    def _compute_mean_difference(self, pos, neg): 
+    def _compute_mean_difference(self, pos, neg, normalize=False): 
         """
         Internal method following Rimsky 2024 to take the mean difference of activations
         
@@ -108,7 +108,7 @@ class DiscriminativeSteerer:
         pairwise_diff = pos - neg 
         
         print(pairwise_diff.shape)
-
+        
         mean_diff = pairwise_diff.mean(dim=0, keepdim=True)
         
         return mean_diff  # [n_layers, d_model]
@@ -628,3 +628,26 @@ class DiscriminatorEvaluator:
             plt.show()
         else:
             raise ValueError("metrics must be one of 'caa', 'params', or 'both'")
+   
+    def plot_norms_by_layer(self):
+        """
+        Plot the L2 norms of both CAA and Fisher-derived vectors per layer side by side.
+        """
+        metrics = ['caa', 'params']
+        fig, axes = plt.subplots(1, 2, figsize=(12, 4), sharey=True)
+
+        for ax, metric in zip(axes, metrics):
+            vectors, layers = self._get_layer_vectors(metric) 
+            norms = [np.linalg.norm(vec) for vec in vectors] # Note we have to check code does not automatically normalize for sci-kit learn 
+
+            ax.plot(layers, norms, marker='o', linestyle='-', color='teal')
+            ax.set_xlabel("Layer")
+            ax.set_ylabel(f"{metric.upper()} vector norm")
+            ax.set_title(f"{metric.upper()} vector norms across layers")
+            ax.grid(True)
+
+        plt.suptitle(f"Layerwise vector norms ({self.steerer.model_name})", fontsize=14)
+        plt.tight_layout()
+        plt.show()
+
+                
