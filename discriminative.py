@@ -17,30 +17,6 @@ import seaborn as sns
 from math import ceil 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
-
-
-
-class ContrastiveSteerer: 
-    def __init__(self, model_name: str, model: Optional[HookedTransformer] = None ): 
-        self.model_name = model_name 
-        if model:
-            self.model = model
-        else: 
-            HookedTransformer.from_pretrained(model_name)
-        
-        self._set_reproducibility()
-    
-    def _set_reproducibility(self, seed:int = 821): 
-        torch.manual_seed(seed)
-        np.random.seed(seed)
-        
-    def _compute_contrastive_steering_vector(self, pos, neg): 
-        return (pos - neg)
-    
-    def _average_contrastive_steering_vector(self, vec): 
-        return np.mean(vec, axis=1)
-    
-    
         
 
 class DiscriminativeSteerer:
@@ -114,7 +90,7 @@ class DiscriminativeSteerer:
         pos = resids[:, :, 1, :]  # [n_layers, n_pairs, d_model]
         neg = resids[:, :, 0, :]  # [n_layers, n_pairs, d_model]
 
-        return pos.detach().cpu().numpy(), neg.detach().cpu().numpy()
+        return pos.detach().cpu(), neg.detach().cpu()
     
     def _compute_mean_difference(self, pos, neg): 
         """
@@ -127,14 +103,13 @@ class DiscriminativeSteerer:
         Returns:
             mean_diff: np.ndarray of shape (1, d_model)
         """
-        assert len(pos.shape == 2) & len(neg.shape == 2), "Mean difference takes a function of pos and neg activations in [n_pairs, d_models]"
         assert pos.shape == neg.shape, "pos and neg must have the same shape"
         
         pairwise_diff = pos - neg 
         
         print(pairwise_diff.shape)
 
-        mean_diff = pairwise_diff.mean(axis=0)
+        mean_diff = pairwise_diff.mean(dim=0, keepdim=True)
         
         return mean_diff  # [n_layers, d_model]
         
@@ -153,13 +128,13 @@ class DiscriminativeSteerer:
                 decompose_residual_stream=False,
                 normalize_streams=normalize_streams,
         )
-        assert pos.shape[0] == neg.shape[0]
+        assert pos.size[0] == neg.size[0]
         
-        n_layers = pos.shape[0]
+        n_layers = pos.size[0]
         for l in range(n_layers): 
-            pos_df = pd.DataFrame(pos[l])
+            pos_df = pd.DataFrame(pos[l].cpu().numpy())
             pos_df["is_syco"] = 1
-            neg_df = pd.DataFrame(neg[l])
+            neg_df = pd.DataFrame(neg[l].cpu().numpy())
             neg_df["is_syco"] = 0
 
             mean_diff = self._compute_mean_difference(pos[l], neg[l])
@@ -168,6 +143,7 @@ class DiscriminativeSteerer:
             df = pd.concat([pos_df, neg_df], axis=0)
             self.y = df["is_syco"].values
             self.X = df.drop(columns=["is_syco"]).values
+            
             try:
                
                 lda = LinearDiscriminantAnalysis()
@@ -480,7 +456,6 @@ class DiscriminativeVisualizer:
     def plot_discriminative_projections(self, plot_title: str, label_dict: any, alpha:any=0.85): 
         self._deserialize_cached_results()
 
-
         sorted_result = sorted(self.results, key=lambda x: x['layer']) 
         layers_to_project = { }
         for res in sorted_result: 
@@ -679,3 +654,8 @@ class DiscriminatorEvaluator:
         plt.show()
 
         return layer_metrics
+    
+    def compare_norms_layerwise(): 
+        pass 
+    
+
