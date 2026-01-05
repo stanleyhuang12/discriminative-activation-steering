@@ -15,9 +15,9 @@ generate_path, test_path, open_ended_test_path = make_generate_test_from_hf("htt
 df = process_raw_json_datasets(file_path=generate_path)
 
 # Initializes discriminator object 
-discriminator = DiscriminativeSteerer(model_name='gpt2-small', d_model=768)
+discriminator = DiscriminativeSteerer(model_name='gpt2-small')
 # Extracts activations from the prompts 
-discriminator.extract_activations_from_prompts(df=df, n_pairs=20)
+discriminator.extract_activations_from_prompts(df=df, n_pairs=5)
 
 # Sweeps through the layers to find the best separability 
 res = discriminator.sweep_linear_discriminative_projection(save_dir='discriminant_pre_results')

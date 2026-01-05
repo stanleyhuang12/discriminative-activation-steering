@@ -124,23 +124,23 @@ class DiscriminativeSteerer:
         
         list_dict = []
         
-        try:
-            pos, neg = self.retrieve_residual_stream_for_contrastive_pair(
+        pos, neg = self.retrieve_residual_stream_for_contrastive_pair(
                 positions_to_analyze=positions_to_analyze,
                 decompose_residual_stream=False,
                 normalize_streams=normalize_streams,
-            )
-            assert pos.size(0) == neg.size(0)
-            n_layers = pos.size(0)
-            for l in range(n_layers): 
-                pos_df = pd.DataFrame(pos[l])
-                pos_df["is_syco"] = 1
-                neg_df = pd.DataFrame(neg[l])
-                neg_df["is_syco"] = 0
-                
-                df = pd.concat([pos_df, neg_df], axis=0)
-                self.y = df["is_syco"].values
-                self.X = df.drop(columns=["is_syco"]).values
+        )
+        assert pos.size(0) == neg.size(0)
+        n_layers = pos.size(0)
+        for l in range(n_layers): 
+            pos_df = pd.DataFrame(pos[l])
+            pos_df["is_syco"] = 1
+            neg_df = pd.DataFrame(neg[l])
+            neg_df["is_syco"] = 0
+            
+            df = pd.concat([pos_df, neg_df], axis=0)
+            self.y = df["is_syco"].values
+            self.X = df.drop(columns=["is_syco"]).values
+            try:
                 
                 lda = LinearDiscriminantAnalysis()
                 
@@ -148,7 +148,7 @@ class DiscriminativeSteerer:
                 y_pred = lda.predict(self.X)
 
                 layer_dict = {
-                    "layer": layer,
+                    "layer": l,
                     "params": {
                         "projected": X_proj, 
                         "coeffs": lda.coef_, 
@@ -163,25 +163,25 @@ class DiscriminativeSteerer:
                 }
                 list_dict.append(layer_dict )
     
-        except Exception as e:
-            print(f"Layer {layer} failed: {e}")
-            layer_dict = {
-                "layer": layer,
-                "params": {
-                    "projected": "error", 
-                    "coeffs": "error", 
-                    "coeff_norm": 0.0, 
-                    "predictions": "error",
-                    "scalings_": "error"
-                },
-                "coeffs": "error",
-                "coeff_norm": 0.0,
-                "explained_variance": "error",
-                "accuracy": 0.0,
-                "confusion_matrix": "error",
-                "classification_report": "error",
-            }
-            list_dict.append(layer_dict)
+            except Exception as e:
+                layer_dict = {
+                    "layer": l,
+                    "params": {
+                        "projected": "error", 
+                        "coeffs": "error", 
+                        "coeff_norm": 0.0, 
+                        "predictions": "error",
+                        "scalings_": "error"
+                    },
+                    "coeffs": "error",
+                    "coeff_norm": 0.0,
+                    "explained_variance": "error",
+                    "accuracy": 0.0,
+                    "confusion_matrix": "error",
+                    "classification_report": "error",
+                    "error": e
+                }
+                list_dict.append(layer_dict)
             
         return list_dict
 
