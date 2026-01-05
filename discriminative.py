@@ -39,7 +39,8 @@ class ContrastiveSteerer:
     
     def _average_contrastive_steering_vector(self, vec): 
         return np.mean(vec, axis=1)
-        
+    
+    
         
 
 class DiscriminativeSteerer:
@@ -77,9 +78,9 @@ class DiscriminativeSteerer:
         return self.logits, self.cache, self.model
         
     def retrieve_residual_stream_for_contrastive_pair(self, 
-                                                      layers: List[int], 
+                                                      layer: Optional[int] = None,
                                                       positions_to_analyze: int = -1,
-                                                      decompose_residual_stream: bool = True,
+                                                      decompose_residual_stream: bool = False,
                                                       normalize_streams: bool = True):
         """
         Returns:
@@ -89,23 +90,116 @@ class DiscriminativeSteerer:
         assert batch_size % 2 == 0, "Contrastive pairs must have even batch size."
 
         n_pairs = batch_size // 2
-        max_layer = max(layers)
 
         if decompose_residual_stream:
-            accum_resids = self.cache.decompose_resid(layer=max_layer, apply_ln=normalize_streams)
+            print("Decompose residual error not yet supported")
+            accum_resids = self.cache.decompose_resid(apply_ln=normalize_streams) 
         else:
-            accum_resids = self.cache.accumulated_resid(layer=max_layer, apply_ln=normalize_streams,)
+            accum_resids = self.cache.accumulated_resid(apply_ln=normalize_streams,)
 
-        # [n_layers, batch, pos, d_model]
-        resids = accum_resids[-1] #TODO: right now only attn_out layer 
-        resids = resids[:, positions_to_analyze, :]
-        print(resids.size())
-        resids = resids.view(n_pairs, 2, resids.size(-1))         # -> [n_layers, n_pairs, 2, d_model]
-        pos = resids[:, 1, :]
-        neg = resids[:, 0, :]
+        if layer is not None:
+            resids = accum_resids[layer:layer + 1]
+        else:
+            resids = accum_resids
+
+        # Result shape: [n_layers, batch, d_model]
+        resids = resids[:, :, positions_to_analyze, :]
+
+        # Reshape batch into pairs: [n_layers, n_pairs, 2, d_model]
+        n_layers = resids.size(0)
+        d_model = resids.size(-1)
+        resids = resids.view(n_layers, n_pairs, 2, d_model)
+
+        # By convention: index 1 = positive, 0 = negative
+        pos = resids[:, :, 1, :]  # [n_layers, n_pairs, d_model]
+        neg = resids[:, :, 0, :]  # [n_layers, n_pairs, d_model]
+
+        return pos.detach().cpu().numpy(), neg.detach().cpu().numpy()
+
+    def _linear_discriminative_projection(self, positions_to_analyze: int = -1, normalize_streams: bool = False,) -> Dict[str, Any]:
+        """
+        Internal method that runs linear discriminant analysis on contrastive residual streams for a single layer.
+        Catches exceptions if LDA fails (e.g., degenerate inputs) and returns 'error'.
+        """
         
-        return np.array(pos), np.array(neg)
+        list_dict = []
+        
+        try:
+            pos, neg = self.retrieve_residual_stream_for_contrastive_pair(
+                positions_to_analyze=positions_to_analyze,
+                decompose_residual_stream=False,
+                normalize_streams=normalize_streams,
+            )
+            assert pos.size(0) == neg.size(0)
+            n_layers = pos.size(0)
+            for l in range(n_layers): 
+                pos_df = pd.DataFrame(pos[l])
+                pos_df["is_syco"] = 1
+                neg_df = pd.DataFrame(neg[l])
+                neg_df["is_syco"] = 0
+                
+                df = pd.concat([pos_df, neg_df], axis=0)
+                self.y = df["is_syco"].values
+                self.X = df.drop(columns=["is_syco"]).values
+                
+                lda = LinearDiscriminantAnalysis()
+                
+                X_proj = lda.fit_transform(self.X, self.y)
+                y_pred = lda.predict(self.X)
 
+                layer_dict = {
+                    "layer": layer,
+                    "params": {
+                        "projected": X_proj, 
+                        "coeffs": lda.coef_, 
+                        "coeff_norm": np.linalg.norm(lda.coef_), 
+                        "predictions": y_pred,
+                        "scalings_": lda.scalings_
+                    },
+                    "explained_variance": lda.explained_variance_ratio_,
+                    "accuracy": accuracy_score(self.y, y_pred),
+                    "confusion_matrix": confusion_matrix(self.y, y_pred),
+                    "classification_report": classification_report(self.y, y_pred, output_dict=True),
+                }
+                list_dict.append(layer_dict )
+    
+        except Exception as e:
+            print(f"Layer {layer} failed: {e}")
+            layer_dict = {
+                "layer": layer,
+                "params": {
+                    "projected": "error", 
+                    "coeffs": "error", 
+                    "coeff_norm": 0.0, 
+                    "predictions": "error",
+                    "scalings_": "error"
+                },
+                "coeffs": "error",
+                "coeff_norm": 0.0,
+                "explained_variance": "error",
+                "accuracy": 0.0,
+                "confusion_matrix": "error",
+                "classification_report": "error",
+            }
+            list_dict.append(layer_dict)
+            
+        return list_dict
+
+    def sweep_linear_discriminative_projection(self,
+                                               save_dir: str,
+                                               rule: Literal['layer', 'coeff_norm', 'explained_variance', 'accuracy'] = "accuracy", positions_to_analyze: int = -1, 
+                                               normalize_streams: bool = False): 
+        """
+        Internal method that runs a sweep of the linear discriminant analysis across multiple layers, saves, and ranks results. 
+        """
+            
+        self.cached_results = self._linear_discriminative_projection(positions_to_analyze=positions_to_analyze, normalize_streams=normalize_streams)
+        self.cached_results.sort(key=lambda x: x[rule], reverse=True)
+        
+        self._save_cached_results(save_dir=save_dir)
+        
+        return self.cached_results
+    
     def _initialize_perma_hook_model(self, layer: str, steering_vector: Union[np.ndarray, torch.Tensor]) -> HookedTransformer:
         """
         Registers a permanent hook that injects a steering vector to the HookedTransformer model.
@@ -127,96 +221,6 @@ class DiscriminativeSteerer:
             self._perma_hook_initialized = True     
 
         return self.model
-
-    def _linear_discriminative_projection(self, layer: int, positions_to_analyze: int = -1, normalize_streams: bool = False,) -> Dict[str, Any]:
-        """
-        Internal method that runs linear discriminant analysis on contrastive residual streams for a single layer.
-        Catches exceptions if LDA fails (e.g., degenerate inputs) and returns 'error'.
-        """
-        print(f"Running _linear_discriminative_projection for layer {layer}")
-        
-        try:
-            pos, neg = self.retrieve_residual_stream_for_contrastive_pair(
-                layers=[layer],
-                positions_to_analyze=positions_to_analyze,
-                decompose_residual_stream=True,
-                normalize_streams=normalize_streams,
-            )
-
-            pos_df = pd.DataFrame(pos)
-            pos_df["is_syco"] = 1
-            print
-
-            neg_df = pd.DataFrame(neg)
-            neg_df["is_syco"] = 0
-
-            df = pd.concat([pos_df, neg_df], axis=0)
-
-            self.y = df["is_syco"].values
-            self.X = df.drop(columns=["is_syco"]).values
-            
-            lda = LinearDiscriminantAnalysis()
-            
-            X_proj = lda.fit_transform(self.X, self.y)
-            y_pred = lda.predict(self.X)
-
-            return {
-                "layer": layer,
-                "params": {
-                    "projected": X_proj, 
-                    "coeffs": lda.coef_, 
-                    "coeff_norm": np.linalg.norm(lda.coef_), 
-                    "predictions": y_pred,
-                    "scalings_": lda.scalings_
-                },
-                "explained_variance": lda.explained_variance_ratio_,
-                "accuracy": accuracy_score(self.y, y_pred),
-                "confusion_matrix": confusion_matrix(self.y, y_pred),
-                "classification_report": classification_report(self.y, y_pred, output_dict=True),
-            }
-    
-        except Exception as e:
-            print(f"Layer {layer} failed: {e}")
-            return {
-                "layer": layer,
-                "params": {
-                    "projected": "error", 
-                    "coeffs": "error", 
-                    "coeff_norm": 0.0, 
-                    "predictions": "error",
-                    "scalings_": "error"
-                },
-                "coeffs": "error",
-                "coeff_norm": 0.0,
-                "explained_variance": "error",
-                "accuracy": 0.0,
-                "confusion_matrix": "error",
-                "classification_report": "error",
-            }
-
-    def sweep_linear_discriminative_projection(self,
-                                                save_dir: str,
-                                                rule: Literal['layer', 'coeff_norm', 'explained_variance', 'accuracy'] = "accuracy", 
-                                                positions_to_analyze: int = -1, 
-                                                normalize_streams: bool = False): 
-        """
-        Internal method that runs a sweep of the linear discriminant analysis across multiple layers, saves, and ranks results. 
-        """
-            
-        accumulated_residuals = self.cache.accumulated_resid()
-        layers = accumulated_residuals.__len__()
-        print(layers)
-        self.cached_results = []
-        
-        for l in range(layers): 
-            ret = self._linear_discriminative_projection(layer=l, positions_to_analyze=positions_to_analyze, normalize_streams=normalize_streams)
-            self.cached_results.append(ret)
-            
-        self.cached_results.sort(key=lambda x: x[rule], reverse=True)
-        
-        self._save_cached_results(save_dir=save_dir)
-        
-        return self.cached_results
     
     def _save_cached_results(self, save_dir): 
         """

@@ -24,8 +24,22 @@ res = discriminator.sweep_linear_discriminative_projection(save_dir='discriminan
 visualizer = DiscriminativeVisualizer(steerer=discriminator, 
                                         layers_to_visualize=1)
 
+discriminator.cache.accumulated_resid()
+resids, _ = discriminator.cache.accumulated_resid(return_labels=True)
+
+resids = resids[:, :, -1, :]
+
+# Reshape batch into pairs: [n_layers, n_pairs, 2, d_model]
+n_layers = resids.size(0)
+d_model = resids.size(-1)
+resids = resids.view(n_layers, -1, 2, d_model)
+
+# By convention: index 1 = positive, 0 = negative
+pos = resids[:, :, 1, :]  # [n_layers, n_pairs, d_model]
+neg = resids[:, :, 0, :]  # [n_layers, n_pairs, d_model]
 
 
+discriminator.model
 visualizer.plot_discriminative_projections(
     plot_title="GPT2-small layerwise projections help discriminate contrastive features", 
     label_dict={
