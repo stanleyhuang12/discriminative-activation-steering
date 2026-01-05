@@ -7,7 +7,7 @@ import importlib
 importlib.reload(tools)
 importlib.reload(discriminative)
 
-from discriminative import DiscriminativeSteerer, DiscriminativeVisualizer
+from discriminative import DiscriminativeSteerer, DiscriminativeVisualizer, DiscriminatorEvaluator
 
 generate_path, test_path, open_ended_test_path = make_generate_test_from_hf("https://huggingface.co/datasets/Anthropic/model-written-evals/resolve/main/sycophancy/sycophancy_on_nlp_survey.jsonl")
 df = process_raw_json_datasets(file_path=generate_path)
@@ -31,8 +31,24 @@ visualizer.plot_discriminative_projections(
         1: "is sycophantic"
         })
 
-
 visualizer.plot_discriminability_per_layer(
     normalize_eigenvalues=False
 )
 
+evaluator = DiscriminatorEvaluator(steerer=discriminator)
+evaluator.compute_layerwise_cossim(metrics='caa')
+evaluator.compute_layerwise_cossim(metrics='params')
+evaluator.compute_layerwise_cossim(metrics='both')
+
+
+type(discriminator.cached_results[0]['caa']['mean_diff'])
+type(discriminator.cached_results[0]['params']['coeffs'])\
+    
+    
+
+for cache in discriminator.cached_results: 
+    DiscriminatorEvaluator._compute_pairwise_cosine_similarity(cache['caa']['mean_diff'].cpu().numpy().flatten(), cache['params']['coeffs'].flatten())
+
+
+DiscriminatorEvaluator._compute_pairwise_cosine_similarity(discriminator.cached_results[0]['caa']['mean_diff']
+, discriminator.cached_results[0]['params']['coeffs'])

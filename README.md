@@ -89,7 +89,7 @@ visualizer.plot_discriminative_projections(
     alpha=0.85  # scatter point transparency
 )
 
-visualizer.plot_discriminability_
+
 ```
 Visualizer projects activation onto discriminative axis and plots overlaid a distribution over so you can visualize which layer is maximally performant for discriminating features 
 
@@ -103,9 +103,19 @@ visualizer.plot_discriminability_per_layer(
 ) # Plots how discriminative each layer is using accuracy and recovered eigenvalues 
 
 ```
+Often probe models have high accuracy for all the layers. It is possible that this discriminative projection also can perform high accuracy for all the layers, which is why the eigenvalue may be a useful diagnostic metric to check which layer has best separability. 
+
+
 ![normalized_eigenvalue_accuracy_plot](assets/demo_image/normalized_eigenvalues_plot.png)
 
-Often probe models have high accuracy for all the layers. It is possible that this discriminative projection also can perform high accuracy for all the layers, which is why the eigenvalue may be a useful diagnostic metric to check which layer has best separability. 
+```python
+evaluator = DiscriminativeEvaluator(steerer=steerer)
+evaluator.compute_layerwise_cosine_similarity(metrics='both') # metrics could be CAA, params, or both for side-by-side plot
+
+```
+
+
+
 
 Note that the eigenvalue is computed through sum of between-class variance / sum of within-class variance. Intuitively, this means we want to find a plane or hyperplane to project all our contrastive examples such that it maximizes the separation of the classes and ensures the examples from the same class are as close together as possible. We can see that while many of the layers are accurate for use to classify or identify linear directions of sycophancy, layer 3 actually has the highest eigenvalue. 
 
