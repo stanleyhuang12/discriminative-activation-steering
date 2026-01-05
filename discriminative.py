@@ -582,16 +582,13 @@ class DiscriminatorEvaluator:
             all_vectors.append(np.array(vec).flatten())
         return all_vectors, [cache['layer'] for cache in cached_results]
 
-    def _compute_cossim_matrix(self, vectors: list, normalize=True):
+    def _compute_cossim_matrix(self, vectors: list):
         """Compute cosine similarity matrix for a list of vectors."""
         n_layers = len(vectors)
         matrix = np.zeros((n_layers, n_layers))
         for i in range(n_layers):
             for j in range(n_layers):
-               
-                vectors_i = np.linalg.norm(vectors[i]) if normalize else vectors[i]
-                vectors_j = np.linalg.norm(vectors[j]) if normalize else vectors[j]
-                matrix[i, j] = self._compute_pairwise_cosine_similarity(vectors_i, vectors_j)
+                matrix[i, j] = self._compute_pairwise_cosine_similarity(vectors[i], vectors[j])
                 
         return matrix
 
