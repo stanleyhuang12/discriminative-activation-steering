@@ -18,16 +18,13 @@ df = process_raw_json_datasets(file_path=generate_path)
 discriminator = DiscriminativeSteerer(model_name='gpt2-small')
 # Extracts activations from the prompts 
 discriminator.extract_activations_from_prompts(df=df, n_pairs=10)
-
+  
 # Sweeps through the layers to find the best separability 
 res = discriminator.sweep_linear_discriminative_projection(save_dir='discriminant_pre_results')
 
 visualizer = DiscriminativeVisualizer(steerer=discriminator, 
                                         layers_to_visualize=1)
 
-
-
-discriminator.cached_results[0]['params']['projected'].squeeze().ndim
 
 visualizer.plot_discriminative_projections(
     plot_title="GPT2-small layerwise projections help discriminate contrastive features", 
@@ -37,26 +34,17 @@ visualizer.plot_discriminative_projections(
         })
 
 
-resss = visualizer._deserialize_cached_results()
-res
-
-sorted_result = sorted(resss, key=lambda x: x['layer']) 
-layers_to_project = { }
-for res in sorted_result: 
-    layer = res['layer']
-    layer_name = f'layer_{layer}'
-    projected = res['params']['projected']
-    layers_to_project[layer_name] = projected
-
-visualizer.plot_1d_layerwise_with_distribution(layer_to_projected=layers_to_project,plot_title="GPT2-small layerwise projections help discriminate contrastive features", 
-    labels={
-        0: "not sycophantic", 
-        1: "is sycophantic"
-        } )
 visualizer.plot_discriminability_per_layer(
     normalize_eigenvalues=False
     
 )
+
+visualizer.steerer._compute_layerwise_eigenvalues()
+
+for cache in visualizer.steerer.cached_results: 
+    x = cache['params']['projected'].squeeze()
+    assert x.ndim == 1 
+    print(x)
 
 discriminator._retrieve_steering_vector(explicit_layers=11)
 discriminator.cached_results[11]['params']['coeffs']

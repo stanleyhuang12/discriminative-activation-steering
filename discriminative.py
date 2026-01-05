@@ -151,6 +151,7 @@ class DiscriminativeSteerer:
                     "layer": l,
                     "params": {
                         "projected": X_proj, 
+                        "labels": self.y.copy(),
                         "coeffs": lda.coef_, 
                         "coeff_norm": np.linalg.norm(lda.coef_), 
                         "predictions": y_pred,
@@ -168,6 +169,7 @@ class DiscriminativeSteerer:
                     "layer": l,
                     "params": {
                         "projected": "error", 
+                        "labels": "error",
                         "coeffs": "error", 
                         "coeff_norm": 0.0, 
                         "predictions": "error",
@@ -288,19 +290,16 @@ class DiscriminativeSteerer:
         
     def _compute_eigenvalue_from_cache(self, cache):
         projected = cache["params"]["projected"]
-        label = self.y
+        labels = cache["params"]["labels"]
 
-        if isinstance(projected, str):
+        if isinstance(projected, str) or (projected == 0).all():
             return None
 
-        projected = projected.squeeze()
-        assert projected.ndim == 1, "LDA projection should be 1D for 2 classes"
+        mu0 = projected[labels == 0].mean()
+        mu1 = projected[labels == 1].mean()
 
-        mu0 = projected[label == 0].mean()
-        mu1 = projected[label == 1].mean()
-
-        var0 = projected[label == 0].var(ddof=1)
-        var1 = projected[label == 1].var(ddof=1)
+        var0 = projected[labels == 0].var(ddof=1)
+        var1 = projected[labels == 1].var(ddof=1)
 
         eigenvalue = (mu0 - mu1) ** 2 / (var0 + var1 + 1e-8)
         return float(eigenvalue)
@@ -310,7 +309,6 @@ class DiscriminativeSteerer:
 
         for cache in self.cached_results:
             eig = self._compute_eigenvalue_from_cache(cache)
-            cache["eigenvalues"] = eig
             layer_eigvals.append(eig)
 
         return layer_eigvals
@@ -394,8 +392,8 @@ class DiscriminativeVisualizer:
 
         for ax, layer in zip(axes, layers):
             x = layer_to_projected[layer]
-            if not isinstance(x, (np.ndarray, list)):
-                print(f"Skipping layer {layer}: not numeric")
+            if not isinstance(x, (np.ndarray, list)) or (x == 0).all():
+                print(f"Skipping layer {layer}: not numeric or invalid array")
                 ax.set_yticks([])
                 ax.set_ylim(0, 0.8)
                 ax.spines["top"].set_visible(False)
@@ -446,6 +444,7 @@ class DiscriminativeVisualizer:
     def plot_discriminative_projections(self, plot_title: str, label_dict: any, alpha:any=0.85): 
         self._deserialize_cached_results()
 
+
         sorted_result = sorted(self.results, key=lambda x: x['layer']) 
         layers_to_project = { }
         for res in sorted_result: 
@@ -456,8 +455,6 @@ class DiscriminativeVisualizer:
         
         labels = self.steerer.y
             
-
-        
         self.plot_1d_layerwise_with_distribution(layer_to_projected=layers_to_project,
                                                  labels=labels,
                                                  plot_title=plot_title, 
@@ -476,8 +473,9 @@ class DiscriminativeVisualizer:
         if not cached:
             raise ValueError("No cached results available to plot.")
 
+        print(cached)
         eigvals = self.steerer._compute_layerwise_eigenvalues()
-        cached.sort(key=lambda x: x['layer'])
+        cached = sorted(cached, key=lambda x: x['layer'])
 
         layers = []
         eigenvalues = []
@@ -495,7 +493,7 @@ class DiscriminativeVisualizer:
         
         if normalize_eigenvalues:
             vals = np.array(eigenvalues, dtype=float)
-            eigenvalues = (vals - vals.min()) / (vals.max() - vals.min() + 1e-8)
+            eigenvalues = (vals - vals.mean() / (vals.std() + 1e-8))
 
         eigenvalues = [np.nan if v is None else v for v in eigenvalues]
         accuracy = [np.nan if v is None else v for v in accuracy]
