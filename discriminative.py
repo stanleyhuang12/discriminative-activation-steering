@@ -572,26 +572,6 @@ class DiscriminativeVisualizer:
         pass 
     
     
-def plot_per_layer_similarities(model_size: str, is_base: bool, behavior: str):
-    analysis_dir = get_analysis_dir(behavior)
-    caa_info = get_caa_info(behavior, model_size, is_base)
-    all_vectors = caa_info["vectors"]
-    n_layers = caa_info["n_layers"]
-    model_name = caa_info["model_name"]
-    matrix = np.zeros((n_layers, n_layers))
-    for layer1 in range(n_layers):
-        for layer2 in range(n_layers):
-            cosine_sim = t.nn.functional.cosine_similarity(all_vectors[layer1], all_vectors[layer2], dim=0).item()
-            matrix[layer1, layer2] = cosine_sim
-    plt.figure(figsize=(3, 3))
-    sns.heatmap(matrix, annot=False, cmap='coolwarm')
-    # Set ticks for every 5th layer
-    plt.xticks(list(range(n_layers))[::5], list(range(n_layers))[::5])
-    plt.yticks(list(range(n_layers))[::5], list(range(n_layers))[::5])
-    plt.title(f"Layer similarity, {model_name}", fontsize=11)
-    plt.savefig(os.path.join(analysis_dir, f"cosine_similarities_{model_name.replace(' ', '_')}_{behavior}.svg"), format='svg')
-    plt.close()
-
 
 class DiscriminatorEvaluator: 
     
@@ -604,50 +584,98 @@ class DiscriminatorEvaluator:
     
         return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
     
-    def compute_layerwise_cossim(self, metrics:Literal['caa', 'params', 'both']): 
+    def compute_layerwise_cossim(self, metrics: Literal['caa', 'params', 'both']):
         """
-        Iterates through all the steering vectors found and computes the cosine similarity for pairwise. 
-        If metrics = "caa", compute cosine similarity and plot per_layer similarity for contrastive activation addition, else 
-        do Fisher-derived vector 
-        
-        "Code is partially adapted from Rimsky 2024"
+        Computes cosine similarity across layers for steering vectors.
+
+        Args:
+            metrics: 'caa', 'params', or 'both'
+                - 'caa': use contrastive activation addition vectors
+                - 'params': use Fisher-derived vectors
+                - 'both': plot both heatmaps side-by-side
         """
-        
-        all_vectors = []
-        n_layers = []
-        
-        cached_results = sorted(self.cached_results, key=lambda x:x['layer'], reverse=True)
-        
-        for cache in cached_results: 
-            if metrics == "caa": 
-                layers = cache['layer']
-                mean_diff = cache['caa']['mean_diff']
-                all_vectors.append(mean_diff)
-                n_layers.append(layers)
-            if metrics == "params": 
-                layers = cache['layer']
-                discriminative_proj = cache['params']['projected']
-                all_vectors.append(discriminative_proj)
-                n_layers.append(layers)
-        
-        matrix = np.zeros((n_layers, n_layers))
-        for layer1 in range(n_layers):
-            for layer2 in range(n_layers):
-                cosine_sim = DiscriminatorEvaluator._compute_pairwise_cosine_similarity(all_vectors[layer1], all_vectors[layer2])
-                matrix[layer1, layer2] = cosine_sim
-        plt.figure(figsize=(3, 3))
-        sns.heatmap(matrix, annot=False, cmap='coolwarm')
-        plt.xticks(list(range(n_layers))[::5], list(range(n_layers))[::5])
-        plt.yticks(list(range(n_layers))[::5], list(range(n_layers))[::5])
-        plt.title(f"Layer similarity, {self.steerer.model_name}", fontsize=11)
+
+        cached_results = sorted(self.cached_results, key=lambda x: x['layer'], reverse=True)
+
+        def compute_matrix(vector_key):
+            all_vectors = [cache[vector_key] if vector_key == 'caa' else cache['params']['projected']
+                        for cache in cached_results]
+            all_vectors = np.array(all_vectors)
+            n_layers = len(all_vectors)
+            matrix = np.zeros((n_layers, n_layers))
+            for i in range(n_layers):
+                for j in range(n_layers):
+                    matrix[i, j] = DiscriminatorEvaluator._compute_pairwise_cosine_similarity(
+                        all_vectors[i], all_vectors[j]
+                    )
+            return matrix, n_layers
+
+        if metrics in ['caa', 'params']:
+            matrix, n_layers = compute_matrix(metrics)
+            plt.figure(figsize=(4, 4))
+            sns.heatmap(matrix, annot=False, cmap='coolwarm')
+            plt.xticks(ticks=list(range(n_layers))[::5], labels=list(range(n_layers))[::5])
+            plt.yticks(ticks=list(range(n_layers))[::5], labels=list(range(n_layers))[::5])
+            plt.title(f"Layer similarity ({metrics}), {self.steerer.model_name}", fontsize=11)
+            plt.show()
+
+        elif metrics == 'both':
+            fig, axes = plt.subplots(1, 2, figsize=(8, 4))
+
+            for ax, m in zip(axes, ['caa', 'params']):
+                matrix, n_layers = compute_matrix(m)
+                sns.heatmap(matrix, annot=False, cmap='coolwarm', ax=ax)
+                ax.set_xticks(list(range(n_layers))[::5])
+                ax.set_yticks(list(range(n_layers))[::5])
+                ax.set_title(f"{m} layer similarity")
+
+            plt.suptitle(f"Layerwise Cosine Similarity, {self.steerer.model_name}", fontsize=12)
+            plt.tight_layout()
+            plt.show()
+
+        else:
+            raise ValueError("metrics must be one of 'caa', 'params', or 'both'")
+
+
+    def compute_layerwise_comparison(self, metric: Literal['cosine', 'l2'] = 'cosine'):
+        """
+        Compare CAA vectors vs Fisher-derived vectors layer by layer.
+
+        Args:
+            metric: 'cosine' or 'l2'
+                - 'cosine': cosine similarity between vectors
+                - 'l2': Euclidean distance between vectors
+
+        Returns:
+            layer_metrics: np.ndarray of shape (n_layers,)
+        """
+
+        cached_results = sorted(self.cached_results, key=lambda x: x['layer'], reverse=True)
+        n_layers = len(cached_results)
+        layer_metrics = np.zeros(n_layers)
+
+        for i, cache in enumerate(cached_results):
+            caa_vec = cache['caa']['mean_diff'] 
+            fisher_vec = cache['params']['projected']
+
+            caa_vec = caa_vec.flatten()
+            fisher_vec = fisher_vec.flatten()
+
+            if metric == 'cosine':
+                num = np.dot(caa_vec, fisher_vec)
+                denom = np.linalg.norm(caa_vec) * np.linalg.norm(fisher_vec)
+                layer_metrics[i] = num / denom
+            elif metric == 'l2':
+                layer_metrics[i] = np.linalg.norm(caa_vec - fisher_vec)
+            else:
+                raise ValueError("metric must be 'cosine' or 'l2'")
+
+        plt.figure(figsize=(6, 3))
+        plt.plot([cache['layer'] for cache in cached_results], layer_metrics, marker='o')
+        plt.xlabel("Layer")
+        plt.ylabel(f"{metric} between CAA and Fisher vectors")
+        plt.title(f"Layerwise comparison: {self.steerer.model_name}")
+        plt.grid(True)
         plt.show()
-        
-        # plt.savefig(os.path.join(analysis_dir, f"cosine_similarities_{model_name.replace(' ', '_')}_{behavior}.svg"), format='svg')
-        # plt.close()
-            
-                
-        
-        
-        
-        
-        
+
+        return layer_metrics
