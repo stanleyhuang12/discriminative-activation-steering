@@ -17,29 +17,18 @@ df = process_raw_json_datasets(file_path=generate_path)
 # Initializes discriminator object 
 discriminator = DiscriminativeSteerer(model_name='gpt2-small')
 # Extracts activations from the prompts 
-discriminator.extract_activations_from_prompts(df=df, n_pairs=5)
+discriminator.extract_activations_from_prompts(df=df, n_pairs=10)
 
 # Sweeps through the layers to find the best separability 
 res = discriminator.sweep_linear_discriminative_projection(save_dir='discriminant_pre_results')
+
 visualizer = DiscriminativeVisualizer(steerer=discriminator, 
                                         layers_to_visualize=1)
 
-discriminator.cache.accumulated_resid()
-resids, _ = discriminator.cache.accumulated_resid(return_labels=True)
-
-resids = resids[:, :, -1, :]
-
-# Reshape batch into pairs: [n_layers, n_pairs, 2, d_model]
-n_layers = resids.size(0)
-d_model = resids.size(-1)
-resids = resids.view(n_layers, -1, 2, d_model)
-
-# By convention: index 1 = positive, 0 = negative
-pos = resids[:, :, 1, :]  # [n_layers, n_pairs, d_model]
-neg = resids[:, :, 0, :]  # [n_layers, n_pairs, d_model]
 
 
-discriminator.model
+discriminator.cached_results[0]['params']['projected'].squeeze().ndim
+
 visualizer.plot_discriminative_projections(
     plot_title="GPT2-small layerwise projections help discriminate contrastive features", 
     label_dict={
@@ -47,6 +36,23 @@ visualizer.plot_discriminative_projections(
         1: "is sycophantic"
         })
 
+
+resss = visualizer._deserialize_cached_results()
+res
+
+sorted_result = sorted(resss, key=lambda x: x['layer']) 
+layers_to_project = { }
+for res in sorted_result: 
+    layer = res['layer']
+    layer_name = f'layer_{layer}'
+    projected = res['params']['projected']
+    layers_to_project[layer_name] = projected
+
+visualizer.plot_1d_layerwise_with_distribution(layer_to_projected=layers_to_project,plot_title="GPT2-small layerwise projections help discriminate contrastive features", 
+    labels={
+        0: "not sycophantic", 
+        1: "is sycophantic"
+        } )
 visualizer.plot_discriminability_per_layer(
     normalize_eigenvalues=False
     

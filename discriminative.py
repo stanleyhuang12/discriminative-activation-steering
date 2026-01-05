@@ -129,8 +129,8 @@ class DiscriminativeSteerer:
                 decompose_residual_stream=False,
                 normalize_streams=normalize_streams,
         )
-        assert pos.size(0) == neg.size(0)
-        n_layers = pos.size(0)
+        assert pos.shape[0] == neg.shape[0]
+        n_layers = pos.shape[0]
         for l in range(n_layers): 
             pos_df = pd.DataFrame(pos[l])
             pos_df["is_syco"] = 1
@@ -364,7 +364,6 @@ class DiscriminativeVisualizer:
                                             plot_title: str,
                                             label_dict: Optional[Dict[int, str]] = None,
                                             alpha: float = 0.85,
-                                            jitter: float = 0.02,
                                             ):
         """
         Plot 1D LDA projections across layers as stacked subplots,
@@ -376,7 +375,6 @@ class DiscriminativeVisualizer:
             plot_title: overall figure title
             label_dict: optional {0: "neg", 1: "pos"}
             alpha: scatter transparency
-            jitter: vertical jitter for scatter
         """
 
         layers = layer_to_projected.keys()
@@ -416,9 +414,9 @@ class DiscriminativeVisualizer:
 
             for i, cls in enumerate(classes):
                 mask = labels == cls
-                y = np.random.normal(0, jitter, size=mask.sum())
-
-                ax.scatter(x[mask],
+                xi = x[mask]
+                y = np.zeros(xi.shape)
+                ax.scatter(xi,
                            y,
                            alpha=alpha,
                            s=12,
@@ -445,9 +443,9 @@ class DiscriminativeVisualizer:
         plt.tight_layout()
         plt.show()
     
-    def plot_discriminative_projections(self, plot_title: str, label_dict: any, alpha:any=0.85, jitter:any=0.0): 
+    def plot_discriminative_projections(self, plot_title: str, label_dict: any, alpha:any=0.85): 
         self._deserialize_cached_results()
-        
+
         sorted_result = sorted(self.results, key=lambda x: x['layer']) 
         layers_to_project = { }
         for res in sorted_result: 
@@ -464,8 +462,7 @@ class DiscriminativeVisualizer:
                                                  labels=labels,
                                                  plot_title=plot_title, 
                                                  label_dict=label_dict, 
-                                                 alpha=alpha,
-                                                 jitter=jitter)
+                                                 alpha=alpha)
         
         return None 
     
