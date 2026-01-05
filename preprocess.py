@@ -43,6 +43,8 @@ evaluator.compute_layerwise_cossim(metrics='both')
 
 evaluator.plot_norms_by_layer()
 
+evaluator.compute_between_method_layerwise_cossim()
+
 type(discriminator.cached_results[0]['caa']['mean_diff'])
 type(discriminator.cached_results[0]['params']['coeffs'])\
     
@@ -51,6 +53,11 @@ type(discriminator.cached_results[0]['params']['coeffs'])\
 for cache in discriminator.cached_results: 
     DiscriminatorEvaluator._compute_pairwise_cosine_similarity(cache['caa']['mean_diff'].cpu().numpy().flatten(), cache['params']['coeffs'].flatten())
 
+
+discriminator.cached_results[0]['params']['coeff_norm']
+discriminator.cached_results[0]['caa']['mean_diff_norm']
+discriminator.cached_results[0]['caa']['mean_diff']
+discriminator.cached_results[0]['params']['coeffs']
 
 DiscriminatorEvaluator._compute_pairwise_cosine_similarity(discriminator.cached_results[0]['caa']['mean_diff']
 , discriminator.cached_results[0]['params']['coeffs'])

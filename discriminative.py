@@ -629,6 +629,44 @@ class DiscriminatorEvaluator:
         else:
             raise ValueError("metrics must be one of 'caa', 'params', or 'both'")
    
+    def compute_between_method_layerwise_cossim(self):
+        """
+        Compute and plot layerwise cosine similarity between CAA and LDA vectors
+        for normalized steering vectors.
+
+        Returns:
+            similarities: np.ndarray of shape (n_layers,)
+        """
+
+        caa_vectors, layers = self._get_layer_vectors('caa')
+        lda_vectors, _ = self._get_layer_vectors('params')
+
+        n_layers = len(layers)
+        similarities = np.zeros(n_layers)
+
+        for i in range(n_layers):
+            caa_vec = caa_vectors[i]
+            lda_vec = lda_vectors[i]
+
+            if np.all(caa_vec == 0) or np.all(lda_vec == 0):
+                similarities[i] = np.nan
+                continue
+
+            caa_vec_norm = caa_vec / (np.linalg.norm(caa_vec) + 1e-12)
+            lda_vec_norm = lda_vec / (np.linalg.norm(lda_vec) + 1e-12)
+            
+            similarities[i] = np.dot(caa_vec_norm, lda_vec_norm)
+
+        plt.figure(figsize=(6, 3))
+        plt.plot(layers, similarities, marker='o')
+        plt.xlabel("Layer")
+        plt.ylabel("Cosine similarity (normalized vectors)")
+        plt.title(f"Layerwise similarity between CAA and LDA vectors ({self.steerer.model_name})")
+        plt.grid(True)
+        plt.show()
+
+        return similarities
+
     def plot_norms_by_layer(self):
         """
         Plot the L2 norms of both CAA and Fisher-derived vectors per layer side by side.
@@ -649,5 +687,6 @@ class DiscriminatorEvaluator:
         plt.suptitle(f"Layerwise vector norms ({self.steerer.model_name})", fontsize=14)
         plt.tight_layout()
         plt.show()
+    
 
                 

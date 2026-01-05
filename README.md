@@ -112,7 +112,6 @@ Often probe models have high accuracy for all the layers. It is possible that th
 evaluator = DiscriminativeEvaluator(steerer=steerer)
 evaluator.compute_layerwise_cosine_similarity(metrics='both') # metrics could be CAA, params, or both for side-by-side plot
 
-evaluator.plot_norms_by_layer()
 ```
 ![layerwise cosine similarity of steer vectors](assets/demo_image/layerwise_cossim_gpt2_demo.png)
 
