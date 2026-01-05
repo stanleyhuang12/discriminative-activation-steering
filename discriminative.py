@@ -115,6 +115,30 @@ class DiscriminativeSteerer:
         neg = resids[:, :, 0, :]  # [n_layers, n_pairs, d_model]
 
         return pos.detach().cpu().numpy(), neg.detach().cpu().numpy()
+    
+    def _compute_mean_difference(self, pos, neg): 
+        """
+        Internal method following Rimsky 2024 to take the mean difference of activations
+        
+        Args:
+            pos: np.ndarray of shape (n_pairs, d_model)
+            neg: np.ndarray of shape (n_pairs, d_model)
+
+        Returns:
+            mean_diff: np.ndarray of shape (1, d_model)
+        """
+        assert len(pos.shape == 2) & len(neg.shape == 2), "Mean difference takes a function of pos and neg activations in [n_pairs, d_models]"
+        assert pos.shape == neg.shape, "pos and neg must have the same shape"
+        
+        pairwise_diff = pos - neg 
+        
+        print(pairwise_diff.shape)
+
+        mean_diff = pairwise_diff.mean(axis=0)
+        
+        return mean_diff  # [n_layers, d_model]
+        
+        # [n_layers, n_pairs, d_model]
 
     def _linear_discriminative_projection(self, positions_to_analyze: int = -1, normalize_streams: bool = False,) -> Dict[str, Any]:
         """
@@ -130,18 +154,22 @@ class DiscriminativeSteerer:
                 normalize_streams=normalize_streams,
         )
         assert pos.shape[0] == neg.shape[0]
+        
         n_layers = pos.shape[0]
         for l in range(n_layers): 
             pos_df = pd.DataFrame(pos[l])
             pos_df["is_syco"] = 1
             neg_df = pd.DataFrame(neg[l])
             neg_df["is_syco"] = 0
+
+            mean_diff = self._compute_mean_difference(pos[l], neg[l])
+
             
             df = pd.concat([pos_df, neg_df], axis=0)
             self.y = df["is_syco"].values
             self.X = df.drop(columns=["is_syco"]).values
             try:
-                
+               
                 lda = LinearDiscriminantAnalysis()
                 
                 X_proj = lda.fit_transform(self.X, self.y)
@@ -156,6 +184,10 @@ class DiscriminativeSteerer:
                         "coeff_norm": np.linalg.norm(lda.coef_), 
                         "predictions": y_pred,
                         "scalings_": lda.scalings_
+                    },
+                    "caa": {
+                        "mean_diff": mean_diff,
+                        "mean_diff_norm": np.linalg.norm(mean_diff)
                     },
                     "explained_variance": lda.explained_variance_ratio_,
                     "accuracy": accuracy_score(self.y, y_pred),
@@ -174,6 +206,10 @@ class DiscriminativeSteerer:
                         "coeff_norm": 0.0, 
                         "predictions": "error",
                         "scalings_": "error"
+                    },
+                    "caa": {
+                        "mean_diff": mean_diff,
+                        "mean_diff_norm": np.linalg.norm(mean_diff)
                     },
                     "coeffs": "error",
                     "coeff_norm": 0.0,
@@ -536,5 +572,82 @@ class DiscriminativeVisualizer:
         pass 
     
     
+def plot_per_layer_similarities(model_size: str, is_base: bool, behavior: str):
+    analysis_dir = get_analysis_dir(behavior)
+    caa_info = get_caa_info(behavior, model_size, is_base)
+    all_vectors = caa_info["vectors"]
+    n_layers = caa_info["n_layers"]
+    model_name = caa_info["model_name"]
+    matrix = np.zeros((n_layers, n_layers))
+    for layer1 in range(n_layers):
+        for layer2 in range(n_layers):
+            cosine_sim = t.nn.functional.cosine_similarity(all_vectors[layer1], all_vectors[layer2], dim=0).item()
+            matrix[layer1, layer2] = cosine_sim
+    plt.figure(figsize=(3, 3))
+    sns.heatmap(matrix, annot=False, cmap='coolwarm')
+    # Set ticks for every 5th layer
+    plt.xticks(list(range(n_layers))[::5], list(range(n_layers))[::5])
+    plt.yticks(list(range(n_layers))[::5], list(range(n_layers))[::5])
+    plt.title(f"Layer similarity, {model_name}", fontsize=11)
+    plt.savefig(os.path.join(analysis_dir, f"cosine_similarities_{model_name.replace(' ', '_')}_{behavior}.svg"), format='svg')
+    plt.close()
 
+
+class DiscriminatorEvaluator: 
+    
+    def __init__(self, steerer): 
+        self.steerer = steerer
+    
+    @staticmethod 
+    def _compute_pairwise_cosine_similarity(a, b):
+        "Computes cosine similarity of two vectors"
+    
+        return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+    
+    def compute_layerwise_cossim(self, metrics:Literal['caa', 'params', 'both']): 
+        """
+        Iterates through all the steering vectors found and computes the cosine similarity for pairwise. 
+        If metrics = "caa", compute cosine similarity and plot per_layer similarity for contrastive activation addition, else 
+        do Fisher-derived vector 
+        
+        "Code is partially adapted from Rimsky 2024"
+        """
+        
+        all_vectors = []
+        n_layers = []
+        
+        cached_results = sorted(self.cached_results, key=lambda x:x['layer'], reverse=True)
+        
+        for cache in cached_results: 
+            if metrics == "caa": 
+                layers = cache['layer']
+                mean_diff = cache['caa']['mean_diff']
+                all_vectors.append(mean_diff)
+                n_layers.append(layers)
+            if metrics == "params": 
+                layers = cache['layer']
+                discriminative_proj = cache['params']['projected']
+                all_vectors.append(discriminative_proj)
+                n_layers.append(layers)
+        
+        matrix = np.zeros((n_layers, n_layers))
+        for layer1 in range(n_layers):
+            for layer2 in range(n_layers):
+                cosine_sim = DiscriminatorEvaluator._compute_pairwise_cosine_similarity(all_vectors[layer1], all_vectors[layer2])
+                matrix[layer1, layer2] = cosine_sim
+        plt.figure(figsize=(3, 3))
+        sns.heatmap(matrix, annot=False, cmap='coolwarm')
+        plt.xticks(list(range(n_layers))[::5], list(range(n_layers))[::5])
+        plt.yticks(list(range(n_layers))[::5], list(range(n_layers))[::5])
+        plt.title(f"Layer similarity, {self.steerer.model_name}", fontsize=11)
+        plt.show()
+        
+        # plt.savefig(os.path.join(analysis_dir, f"cosine_similarities_{model_name.replace(' ', '_')}_{behavior}.svg"), format='svg')
+        # plt.close()
+            
+                
+        
+        
+        
+        
         
