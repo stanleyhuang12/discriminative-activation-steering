@@ -14,4 +14,17 @@
 
 
 
-Experiment to try a bit of Nina Rimsky's CAA method 
+OK, so the theory in my head makes sense but the norm of the LDA steering vector is 
+so large (140000???). Why is that? It is probably due to the fact that it is in the original units 
+..when we multiply by the covariance matrix.
+
+One solution is to normalize everything before we find the solution or normalize after. 
+Steering vector with fisher criterion and mean difference are VASTLY different (even when normalized).
+What does this mean??
+
+Are the eigenvalues a good measure of separability?? or is it just a noisy signal. A few problems is that 
+at certain times when I run the code, the first layer has the highest eigenvalue which does not make sense unless
+because the initial layer is initialized in such a way that the within variance between class is INCREDIBLY small 
+perhaps we could just use between class variance as a meaasure then! Not eigenvalues.
+
+
