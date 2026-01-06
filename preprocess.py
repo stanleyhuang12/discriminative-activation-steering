@@ -11,18 +11,25 @@ from discriminative import DiscriminativeSteerer, DiscriminativeVisualizer, Disc
 
 generate_path, test_path, open_ended_test_path = make_generate_test_from_hf("https://huggingface.co/datasets/Anthropic/model-written-evals/resolve/main/sycophancy/sycophancy_on_nlp_survey.jsonl")
 df = process_raw_json_datasets(file_path=generate_path)
+valid_df = process_raw_json_datasets(file_path=test_path)
 
 # Initializes discriminator object 
 discriminator = DiscriminativeSteerer(model_name='gpt2-small')
+
 # Extracts activations from the prompts 
-discriminator.extract_activations_from_prompts(df=df, n_pairs=30)
+discriminator.extract_activations_from_prompts(df=df, n_pairs=20)
+res = discriminator.sweep_linear_discriminative_projection(save_dir='discriminant_pre_results')
+
+# Inject permanent hook into residual stream and run forward pass 
+discriminator.hook_discriminative_steer(normalize=True)
+
+best_discriminative_steering_vector = discriminator._retrieve_steering_vector()
+responses = discriminator.run_forward_pass_validation_set(valid_df=valid_df)
 
 # Sweeps through the layers to find the best separability 
-res = discriminator.sweep_linear_discriminative_projection(save_dir='discriminant_pre_results')
 
 visualizer = DiscriminativeVisualizer(steerer=discriminator, 
                                         layers_to_visualize=1)
-
 
 visualizer.plot_discriminative_projections(
     plot_title="GPT2-small layerwise projections help discriminate contrastive features", 
@@ -61,3 +68,4 @@ discriminator.cached_results[0]['params']['coeffs']
 
 DiscriminatorEvaluator._compute_pairwise_cosine_similarity(discriminator.cached_results[0]['caa']['mean_diff']
 , discriminator.cached_results[0]['params']['coeffs'])
+

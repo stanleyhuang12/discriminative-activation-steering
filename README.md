@@ -105,6 +105,10 @@ visualizer.plot_discriminability_per_layer(
 ```
 Often probe models have high accuracy for all the layers. It is possible that this discriminative projection also can perform high accuracy for all the layers, which is why the eigenvalue may be a useful diagnostic metric to check which layer has best separability. 
 
+Note that the eigenvalue is computed through sum of between-class variance / sum of within-class variance. Intuitively, this means we want to find a plane or hyperplane to project all our contrastive examples such that it maximizes the separation of the classes and ensures the examples from the same class are as close together as possible. We can see that while many of the layers are accurate for use to classify or identify linear directions of sycophancy, layer 3 actually has the highest eigenvalue. 
+
+It may be hard to interpret eigenvalues but we just care about which layer recovers the largest eigenvalues, so there is an option to normalize. 
+
 
 ![normalized_eigenvalue_accuracy_plot](assets/demo_image/normalized_eigenvalues_plot.png)
 
@@ -112,15 +116,13 @@ Often probe models have high accuracy for all the layers. It is possible that th
 evaluator = DiscriminativeEvaluator(steerer=steerer)
 evaluator.compute_layerwise_cosine_similarity(metrics='both') # metrics could be CAA, params, or both for side-by-side plot
 
+
 ```
 ![layerwise cosine similarity of steer vectors](assets/demo_image/layerwise_cossim_gpt2_demo.png)
 
 
 
 
-Note that the eigenvalue is computed through sum of between-class variance / sum of within-class variance. Intuitively, this means we want to find a plane or hyperplane to project all our contrastive examples such that it maximizes the separation of the classes and ensures the examples from the same class are as close together as possible. We can see that while many of the layers are accurate for use to classify or identify linear directions of sycophancy, layer 3 actually has the highest eigenvalue. 
-
-It may be hard to interpret eigenvalues but we just care about which layer recovers the largest eigenvalues, so there is an option to normalize. 
 
 
 ## Mathematic explanation 

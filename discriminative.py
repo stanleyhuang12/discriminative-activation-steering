@@ -260,7 +260,7 @@ class DiscriminativeSteerer:
             else: 
                 print("Retrieving the projection vector from the best accuracy. Only method supported for now.")
                 self.cached_results.sort(key=lambda x: x["accuracy"], reverse=True)
-                coeffs = self.cached_results[0]['coeffs']
+                coeffs = self.cached_results['params']['coeffs']
         else: 
             file_path = os.path.join(self.save_dir, os.listdir(self.save_dir)[-1])
             with open(file_path, "rb") as f: 
@@ -276,9 +276,7 @@ class DiscriminativeSteerer:
     def _compute_discriminative_steering_vector(self, steering_vec: np.ndarray, steering_coeffs: float, normalize: bool = False) -> np.ndarray:
         """
         Computes a normalized discriminative steering vector. 
-
         """
-
         if normalize:
             steer_vec = (steering_coeffs * steering_vec) / np.linalg.norm(steering_vec)
         else:
@@ -286,11 +284,14 @@ class DiscriminativeSteerer:
 
         return steer_vec
     
-    def hook_discriminative_steer(self, steering_coeffs: float, normalize: bool = False, explicit_layers=None): 
+    def hook_model_with_steer(self, steering_coeffs: float, normalize: bool = False, explicit_layers=None): 
         """
         Public method to call that permanently hooks the model with a steering vector. 
         """
+        norm_steer = np.linalg.norm(steering_coeffs)
         if steering_coeffs > 3: 
+            if norm_steer > 1: 
+                print(f"Warning!: Steering vector may be too large. The L2 norm is {norm_steer}.")
             print("Warning!: Steering coefficient may be too large, which can cause model responses to degenerate")
         steer_vector = self._retrieve_steering_vector(explicit_layers=explicit_layers)
         steer_vector = self._compute_discriminative_steering_vector(steering_vec=steer_vector, 
@@ -324,26 +325,24 @@ class DiscriminativeSteerer:
             layer_eigvals.append(eig)
 
         return layer_eigvals
+    
+    def run_forward_pass_validation_set(self, valid_df, n_pairs=None):
+        valid_df = valid_df.copy()
+        unique_pairs = valid_df['pair_id'].unique()
+        if n_pairs: 
+            sampled_pairs = pd.Series(unique_pairs).sample(n=n_pairs, random_state=18).tolist()
+        else:
+            sampled_pairs = unique_pairs
         
-    def decode_model_responses(self, prompts, mode: Literal['inference', 'cache', 'hooks']): 
+        df_sample = valid_df[valid_df['pair_id'].isin(sampled_pairs)]
+        df_sample = df_sample.sort_values('pair_id').reset_index(drop=True)
+        self.prompts = df_sample['prompt'].to_list()
         
-        """
-        Takes in a list of prompts and performs a forward pass of the model responses, save the resulting answers. 
-        """
+        with torch.inference_mode(): 
+            responses = self.model(self.prompts)
         
-        if self._perma_hook_initialized: print("Running models with registered permanent hooks.")
-        
-        if mode == "inference": 
-            with torch.inference_mode():
-                responses = self.model(prompts) 
-                return responses 
-        
-        if mode == "cache": 
-            self.model.run_with_cache(prompts)
-            
-        
-        pass 
-
+        return responses 
+    
 
 """
 

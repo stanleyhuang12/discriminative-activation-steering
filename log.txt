@@ -1,18 +1,11 @@
 1. Extract residual stream for one pair of contrastive examples
-
 2. Compute steering vector (option to normalize, intervene on strength, etc)
-
 3. Inject steering vector back into residual stream via a hook function 
-
 4. Further decode responses 
-
 5. Refactor code for 200 examples 
-
 6. Compute eigenvalues as a relative_discriminability_metric 
 
-
-
-
+Progress logs and mid thoughts
 
 OK, so the theory in my head makes sense but the norm of the LDA steering vector is 
 so large (140000???). Why is that? It is probably due to the fact that it is in the original units 
@@ -22,9 +15,16 @@ One solution is to normalize everything before we find the solution or normalize
 Steering vector with fisher criterion and mean difference are VASTLY different (even when normalized).
 What does this mean??
 
+OK, I know that LDA is scale-invariant which means the maximization problem does not really care about the norm of the vector. 
+Maybe this is fine. Need to run both models with hooks first and see if there are a difference. 
+
 Are the eigenvalues a good measure of separability?? or is it just a noisy signal. A few problems is that 
 at certain times when I run the code, the first layer has the highest eigenvalue which does not make sense unless
 because the initial layer is initialized in such a way that the within variance between class is INCREDIBLY small 
 perhaps we could just use between class variance as a meaasure then! Not eigenvalues.
+
+Plus, the correlation of the steering vector for the LDA method is very different, compared to Rimsky's method. 
+I This might be a good thing because if every layer has similar steering vector are we really isolating the concept we want to steer?
+
 
 
