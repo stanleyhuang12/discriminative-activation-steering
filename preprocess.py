@@ -21,7 +21,7 @@ discriminator.extract_activations_from_prompts(df=df, n_pairs=10)
 res = discriminator.sweep_linear_discriminative_projection(save_dir='discriminant_pre_results')
 
 # Inject permanent hook into residual stream and run forward pass
-best_discriminative_steering_vector = discriminator._retrieve_steering_vector() 
+layer, best_discriminative_steering_vector = discriminator._retrieve_steering_vector() 
 
 
 cached_res = sorted(discriminator.cached_results, key=lambda x: x["accuracy"], reverse=True)

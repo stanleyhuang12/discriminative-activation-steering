@@ -218,6 +218,7 @@ class DiscriminativeSteerer:
         """
         Registers a permanent hook that injects a steering vector to the HookedTransformer model.
         """
+        layer_name = f"blocks.{layer}.hook_resid_pre"
         if isinstance(steering_vector, np.ndarray):
             steering_vector = torch.tensor(steering_vector).detach()
 
@@ -279,7 +280,6 @@ class DiscriminativeSteerer:
         return layer, coeffs
     
         
-    @property 
     def _compute_discriminative_steering_vector(self, steering_vec: np.ndarray, steering_coeffs: float, normalize: bool = False) -> np.ndarray:
         """
         Computes a normalized discriminative steering vector. 
