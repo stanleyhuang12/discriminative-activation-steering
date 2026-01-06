@@ -1,5 +1,7 @@
 # discriminative-activation-steering
 
+## EVALUATION IS CURRENTLY ONGOING
+
 ### A toolkit for steering neural network activations along discriminative axes. 
 
 Why do we want to steer along discriminative axes? 
