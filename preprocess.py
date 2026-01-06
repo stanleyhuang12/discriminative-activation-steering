@@ -17,13 +17,19 @@ valid_df = process_raw_json_datasets(file_path=test_path)
 discriminator = DiscriminativeSteerer(model_name='gpt2-small')
 
 # Extracts activations from the prompts 
-discriminator.extract_activations_from_prompts(df=df, n_pairs=20)
+discriminator.extract_activations_from_prompts(df=df, n_pairs=10)
 res = discriminator.sweep_linear_discriminative_projection(save_dir='discriminant_pre_results')
 
-# Inject permanent hook into residual stream and run forward pass 
-discriminator.hook_discriminative_steer(normalize=True)
+# Inject permanent hook into residual stream and run forward pass
+best_discriminative_steering_vector = discriminator._retrieve_steering_vector() 
 
-best_discriminative_steering_vector = discriminator._retrieve_steering_vector()
+
+cached_res = sorted(discriminator.cached_results, key=lambda x: x["accuracy"], reverse=True)
+coeffs = cached_res[0]['params']['coeffs']
+
+discriminator.cached_results[0]['params']['coeffs']
+discriminator.hook_model_with_steer(steering_coeffs=1, normalize=True)
+
 responses = discriminator.run_forward_pass_validation_set(valid_df=valid_df)
 
 # Sweeps through the layers to find the best separability 

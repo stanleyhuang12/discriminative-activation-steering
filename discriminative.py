@@ -257,19 +257,26 @@ class DiscriminativeSteerer:
             if explicit_layers: 
                 result_dict = [res for res in self.cached_results if res['layer'] == explicit_layers][0]
                 coeffs = result_dict['params']['coeffs']
+                layer = result_dict['layer']
             else: 
                 print("Retrieving the projection vector from the best accuracy. Only method supported for now.")
-                self.cached_results.sort(key=lambda x: x["accuracy"], reverse=True)
-                coeffs = self.cached_results['params']['coeffs']
+                cached_res = sorted(self.cached_results, key=lambda x: x["accuracy"], reverse=True)
+                print(type(cached_res[0]))
+                print(cached_res[0].keys())
+                
+                coeffs = cached_res[0]['params']['coeffs']
+                layer = cached_res[0]['layer']
         else: 
             file_path = os.path.join(self.save_dir, os.listdir(self.save_dir)[-1])
             with open(file_path, "rb") as f: 
                 res = pickle.load(f)
                 if explicit_layers: 
                     coeffs = res[explicit_layers]['params']['coeffs']
+                    layer = explicit_layers 
                 else: 
                     coeffs = res[0]['params']['coeffs']
-        return coeffs 
+                    layer = explicit_layers 
+        return layer, coeffs
     
         
     @property 
@@ -288,17 +295,12 @@ class DiscriminativeSteerer:
         """
         Public method to call that permanently hooks the model with a steering vector. 
         """
-        norm_steer = np.linalg.norm(steering_coeffs)
         if steering_coeffs > 3: 
-            if norm_steer > 1: 
-                print(f"Warning!: Steering vector may be too large. The L2 norm is {norm_steer}.")
             print("Warning!: Steering coefficient may be too large, which can cause model responses to degenerate")
-        steer_vector = self._retrieve_steering_vector(explicit_layers=explicit_layers)
-        steer_vector = self._compute_discriminative_steering_vector(steering_vec=steer_vector, 
-                                                                    steering_coeffs=steering_coeffs, 
-                                                                    normalize=normalize)
+        layer, steer_vector = self._retrieve_steering_vector(explicit_layers=explicit_layers)
+        steer_vector = self._compute_discriminative_steering_vector(steering_vec=steer_vector, steering_coeffs=steering_coeffs, normalize=normalize)
         
-        self._initialize_perma_hook_model(layer=explicit_layers, steering_vector=steer_vector)
+        self._initialize_perma_hook_model(layer=layer, steering_vector=steer_vector)
         print(f"Registered a permanent forward hook to {self.model_name} model")
         
     def _compute_eigenvalue_from_cache(self, cache):
