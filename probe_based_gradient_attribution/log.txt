@@ -1,0 +1,5 @@
+I am inspired by Uzay's recommendation of using a probe-based gradient attribution method. 
+
+Attribution patching takes a linear-based approximation of activation patching
+Activation patching attempts to find a layer to intervene that is sufficient to recover the clean prompt from a corrupted prompt
+

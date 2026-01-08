@@ -6,6 +6,7 @@ import discriminative
 import importlib
 importlib.reload(tools)
 importlib.reload(discriminative)
+from transformer_lens import Hoo
 
 from discriminative import DiscriminativeSteerer, DiscriminativeVisualizer, DiscriminatorEvaluator
 
@@ -30,8 +31,11 @@ coeffs = cached_res[0]['params']['coeffs']
 discriminator.cached_results[0]['params']['coeffs']
 discriminator.hook_model_with_steer(steering_coeffs=1, normalize=True)
 
-responses = discriminator.run_forward_pass_validation_set(valid_df=valid_df)
+responses = discriminator.run_forward_pass_validation_set(valid_df=valid_df, n_pairs=5)
+responses.size()
 
+for response in responses: 
+    discriminator.model.tokenizer.decode(response[-1].argmax())
 # Sweeps through the layers to find the best separability 
 
 visualizer = DiscriminativeVisualizer(steerer=discriminator, 
