@@ -3,3 +3,105 @@ I am inspired by Uzay's recommendation of using a probe-based gradient attributi
 Attribution patching takes a linear-based approximation of activation patching
 Activation patching attempts to find a layer to intervene that is sufficient to recover the clean prompt from a corrupted prompt
 
+
+Spent a few hours downloading a compatible torch >= 2.4.0 because Mac apparently doesn't allow it to work anymore and then 
+nnsight==0.5.14 --no-dep since Torch was downloaded via a conda env and then i pip installed nnsight, pip did not detect the pytorch module which was weird 
+
+So for the part where we perform activation patching (setting the values of a layer with another layer)
+
+1. we first loop through all the layers
+2. for every single layer, we are going through every single sequence length 
+
+Note that the activation output is 
+
+[ batch, sequence_length, hidden dimensions (which is 768 for GPT2) ]
+
+if we are to access the entire hidden states position we can do 
+
+[ n_layers, batch, sequence_length, hidden_dimensions ]
+
+Why are we calling model.trace() multiple times.. wouldn't that make it inefficient to have to set up remote=True 
+if we are doing multiple for loops. Why can't model.trace() be called before the for loops 
+
+There seems to be another challenge of patching when it comes to asymmetrical lengths of tokens 
+
+
+--------
+
+Attribution patching 
+- dispatch=True to load the model immediately not lazily. otherwise model is loaded when the first trace is called
+- we can select certain values of a tensor by calling .gather()
+
+
+tensor_ex = torch.tensor(
+    [
+        [5, 5],
+        [2, 3]
+    ]
+    )
+
+index = torch.tensor(
+    [[0],
+    [0]]
+)
+
+If I want to select 5, 2 which is the column position I set dim=1 to what I want to gather and then provide the index for every single row 
+tensor_ex.gather(dim=1, index=index)
+
+x = torch.tensor([
+    [[ 1,  2],
+     [ 3,  4],
+     [ 5,  6],
+     [ 7,  8]],
+
+    [[ 9, 10],
+     [11, 12],
+     [13, 14],
+     [15, 16]]
+])
+
+
+"""
+In batch 0:
+pick column 0 for rows 0 and 2,
+pick column 1 for rows 1 and 3
+
+In batch 1:
+pick column 1 for rows 0 and 2,
+pick column 0 for rows 1 and 3
+"""
+index = torch.tensor([
+    [[0],
+    [1],
+    [0],
+    [1]],
+    [[1],
+     [0],
+     [1],
+     [0]]
+])
+x.gather(dim=2, index=index)
+
+ answer_token_indices[:, 0]
+tensor([ 5335,  1757,  4186,  3700,  6035, 15686,  5780, 14235])
+>>> answer_token_indices[:, 0].unsqueeze(1)
+tensor([[ 5335],
+        [ 1757],
+        [ 4186],
+        [ 3700],
+        [ 6035],
+        [15686],
+        [ 5780],
+        [14235]])
+
+
+We can initialize tracer.barrier() to allow the values of one trace to be used 
+in a differnt tracer.invoke() context
+
+
+Note that 
+
+x=model.transformer.h[:][NEED SPECIFIC INDEX].output.save() works
+NEED SPECIFIC INDEX has to be an integer value can not be a ":"
+
+We take the gradient of the ioi_metric with respects to the effects of activation patching 
