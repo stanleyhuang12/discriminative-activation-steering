@@ -294,6 +294,21 @@ corrupted_out = []
 corrupted_grads = []
 
 with model.trace() as tracer: 
-    with tracer.invoke(clean_tokens) as invoker_clean: 
+    with tracer.invoke(prompts) as invoker_clean: 
         for layer in model.transformer.h: 
-            layer
+            attn_out = layer.attn.c_proj.input
+            clean_out.append(attn_out.save())
+    
+    with tracer.invoke(prompts) as invoker_corrupt: 
+        for layer in model.transformer.h: 
+            attn_out = layer.attn.c_proj.input
+            attn_out.retain_grad()
+            corrupted_out.append(attn_out.save())
+            
+            ## Retrieve the gradient 
+            corrupted_grads.append(attn_out.grad.save())
+            
+        logits = model.lm_head.output.save()
+        value = ioi_metric(logits.cpu())
+        value.backward()
+        

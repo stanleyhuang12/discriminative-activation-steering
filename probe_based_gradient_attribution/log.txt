@@ -104,4 +104,17 @@ Note that
 x=model.transformer.h[:][NEED SPECIFIC INDEX].output.save() works
 NEED SPECIFIC INDEX has to be an integer value can not be a ":"
 
-We take the gradient of the ioi_metric with respects to the effects of activation patching 
+because note that model.transformer.h provides a list of module. we can further 
+recursively partition attention output by its submodules 
+
+model.transformer.h.c_attn model.transformer.c_proj 
+
+Right now we are trying to estimate the effects of an intervention onto the ioi_metric with respects to a datapoint 
+
+model.transformer.h[specific_layer].output will provide the output after resid_dropout() these are all very non-linear and thus we will exclude in our analysis 
+this is also prior to other linear and MLP transformations 
+
+
+We take the gradient of the ioi_metric with respects to the input of the c_proj to estimate a linear effects of activation patching 
+
+
