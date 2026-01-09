@@ -1,8 +1,12 @@
-import nnsight
+
 from nnsight import LanguageModel
 
 
 model = LanguageModel("openai-community/gpt2", device_map="auto")
+
+import nnsight
+from nnsight import CONFIG
+
 
 # This is an indirect object identification task 
 
@@ -11,11 +15,19 @@ corrupted_prompt = (
     "After John and Mary went to the store, John gave a bottle of milk to"
 )
 
-correct_index = model.tokenizer(" John")["input_ids"][0] 
+
+correct_index = model.tokenizer(" John")["input_ids"][0] # includes a space
 incorrect_index = model.tokenizer(" Mary")["input_ids"][0] # includes a space
 
-N_LAYERS = 12
-clean_hs=[]
+print(f"' John': {correct_index}")
+print(f"' Mary': {incorrect_index}")
+
+
+N_LAYERS = len(model.transformer.h)
+clean_hs = []
+
+
+
 
 print(model)
 """
@@ -51,12 +63,13 @@ N_LAYERS = len(model.transformer.h)
 clean_hs = []
 
 # Clean run
-
-
 with model.trace() as tracer:
     with tracer.invoke(clean_prompt) as invoker:
-        clean_tokens = invoker.inputs[0]['input_ids']
+        print(invoker.inputs[0]['input_ids'])
+        clean_tokens = invoker.inputs[0]['input_ids'][0]
 
+        # Get hidden states of all layers in the network.
+        # We index the output at 0 because it's a tuple where the first index is the hidden state.
         for layer_idx in range(N_LAYERS):
             clean_hs.append(model.transformer.h[layer_idx].output[0].save())
 
@@ -67,22 +80,6 @@ with model.trace() as tracer:
         clean_logit_diff = (
             clean_logits[0, -1, correct_index] - clean_logits[0, -1, incorrect_index]
         ).save()
-    
-clean_hs[0].size() 
-print("torch.Size([1, 16, 768]) # batch, num_tokens, hidden_state")
-clean_logit_diff
-print("tensor(4.1235, grad_fn=<SubBackward0>)")
-        
-corrupted_logits_ls = []
-with model.trace(corrupted_prompt) as tracer:
-    corrupted_logits = model.lm_head.output
-    corrupted_logits_ls.append(corrupted_logits.save())
-    # Calculate the difference between the correct answer and incorrect answer for the corrupted run and save it.
-    corrupted_logit_diff = (
-        corrupted_logits[0, -1, correct_index] # Takes the logits of the corrupted output layer which is in 
-        - corrupted_logits[0, -1, incorrect_index]
-    ).save()
-
 """
 My test to see what the model response is 
 """
