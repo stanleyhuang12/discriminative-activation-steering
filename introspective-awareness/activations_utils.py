@@ -1,5 +1,5 @@
 import torch
-
+from torch.nn import functional as F
 
 def extract_activations(
     model, 
@@ -52,7 +52,7 @@ def extract_activations(
         "mlp_act": mlp_acts,
         "mlp_acts_inj": mlp_acts_inj
     }
-    
+
        
 def compare_layerwise_cosine_similarity(
     activation_outputs,

@@ -53,7 +53,6 @@ model = LanguageModel("openai-community/gpt2")
 baseline_prompt = "Do you detect an injected thought?"
 concept_injected_prompt = "Do you detect horse an injected thought?"
 
-
 activation_outputs = []
 mlp_hiddens = []
 mlp_gelus = []
@@ -105,19 +104,40 @@ activation_dict = extract_activations(
     inject_noise=True
 )
 
+activation_dict_2 = extract_activations(
+    model=model,
+    baseline_prompt=baseline_prompt, 
+    inject_noise=True, 
+    noise_variance=1
+)
 
-activations[:, [-1, -2], :].size()
 
-num_layers = len(acts_corr_list)
+print(activation_dict.keys())
+act_out_corr, gelu_out_corr = compare_layerwise_cosine_similarity(
+    activation_outputs=activation_dict['act_out'],
+    activation_outputs_inj=activation_dict['act_out_inj'],
+    mlp_hiddens=activation_dict['mlp_hid'],
+    mlp_hiddens_inj=activation_dict['mlp_hid_inj']
+)
+act_out_corr, gelu_out_corr = compare_layerwise_cosine_similarity(
+    activation_outputs=activation_dict_2['act_out'],
+    activation_outputs_inj=activation_dict_2['act_out_inj'],
+    mlp_hiddens=activation_dict_2['mlp_act'],
+    mlp_hiddens_inj=activation_dict_2['mlp_acts_inj']
+)
+
+
+
+num_layers = len(act_out_corr)
 layers = list(range(num_layers))  # x-axis: layer indices
 
 plt.figure(figsize=(10, 5))
 
 # Plot activation correlations
-plt.plot(layers, acts_corr_list, marker='o', color='blue', label='Activations')
+plt.plot(layers, act_out_corr, marker='o', color='blue', label='Activations')
 
 # Plot MLP correlations
-plt.plot(layers, mlp_corrs_list, marker='s', color='red', label='MLP hidden states')
+plt.plot(layers, gelu_out_corr, marker='s', color='red', label='MLP hidden states')
 
 plt.xlabel('Layer')
 plt.ylabel('Cosine Similarity')
