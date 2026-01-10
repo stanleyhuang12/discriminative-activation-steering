@@ -9,7 +9,8 @@ def extract_activations(
     pos_to_inject=-1,
     noise_mean=0.0,
     noise_variance=0.5, 
-    random_seed=12
+    random_seed=12,
+    save_logits=True
 ): 
     torch.manual_seed(random_seed)
 
@@ -31,6 +32,9 @@ def extract_activations(
                 activation_outputs.append(activations.save())
                 mlp_hiddens.append(mlp_hidden.save())
                 mlp_acts.append(mlp_gelu.save())
+            
+            if save_logits:        
+                logits = model.lm_head.output[0].save()
         
         with tracer.invoke(baseline_prompt) as invoker_injected:
             for l in model.transformer.h:
@@ -44,20 +48,24 @@ def extract_activations(
 
                 activation_outputs_inj.append(activations.save())
                 mlp_hiddens_inj.append(mlp_hidden.save())
-                mlp_acts_inj.append(mlp_gelu.save())  
+                mlp_acts_inj.append(mlp_gelu.save()) 
+            
+            if save_logits: 
+                logits_inj = model.lm_head.output[0].save()
+                
     return {
         "act_out": activation_outputs,
         "act_out_inj": activation_outputs_inj,
         "mlp_hid": mlp_hiddens,
         "mlp_hid_inj": mlp_hiddens_inj,
-        "mlp_act": mlp_acts,
+        "mlp_acts": mlp_acts,
         "mlp_acts_inj": mlp_acts_inj
-    }
+    }, logits, logits_inj
 
 
 
 
-def compute_layerwise_cosine_similarity_general(activations_dict, token_pos=-1):
+def compute_layerwise_cosine_similarity(activations_dict, token_pos=-1):
     """
     Compute cosine similarity for all original/injected activation pairs in a dictionary.
 
@@ -70,13 +78,11 @@ def compute_layerwise_cosine_similarity_general(activations_dict, token_pos=-1):
     correlations = {}
 
     for key in activations_dict:
-        # Skip keys that are already injected
         if key.endswith('_inj'):
             continue
         
         inj_key = key + '_inj'
         if inj_key not in activations_dict:
-            # Skip if no injected pair
             continue
 
         sims = []
@@ -123,3 +129,141 @@ def plot_layerwise_correlations(corr_dict):
     plt.legend()
     plt.tight_layout()
     plt.show()
+
+
+def plot_sorted_logit_distribution(
+    logits,
+    tokenizer=None,
+    top_k=None,
+    title="Sorted Logit Distribution"
+):
+    """
+    Visualize sorted logits from highest to lowest.
+
+    Args:
+        logits (Tensor): shape [vocab] or [batch, vocab]
+        tokenizer: optional tokenizer for decoding top tokens
+        top_k (int): if provided, plot only top-k logits
+        title (str): plot title
+    """
+    # Handle batch dimension
+    if logits.ndim == 2:
+        logits = logits[0]
+
+    logits = logits.detach().cpu()
+
+    # Sort logits descending
+    sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+
+    if top_k is not None:
+        sorted_logits = sorted_logits[:top_k]
+        sorted_indices = sorted_indices[:top_k]
+
+    x = range(len(sorted_logits))
+
+    plt.figure(figsize=(10, 5))
+    plt.plot(x, sorted_logits)
+    plt.xlabel("Token rank (sorted by logit)")
+    plt.ylabel("Logit value")
+    plt.title(title)
+    plt.grid(True, linestyle="--", alpha=0.5)
+
+    # Annotate top tokens if tokenizer provided
+    if tokenizer is not None:
+        top_tokens = [
+            tokenizer.decode([idx.item()]) for idx in sorted_indices[:10]
+        ]
+        for i, tok in enumerate(top_tokens):
+            plt.annotate(
+                tok.replace("\n", "\\n"),
+                (i, sorted_logits[i].item()),
+                textcoords="offset points",
+                xytext=(0, 8),
+                ha="center",
+                fontsize=9
+            )
+
+    plt.tight_layout()
+    plt.show()
+
+
+def compare_sorted_logit_distributions(
+    logits_a,
+    logits_b,
+    top_k=None,
+    labels=("Baseline", "Injected"),
+    title="Sorted Logit Distribution Comparison",
+    compute_metrics=True
+):
+    """
+    Compare two logit distributions by sorting each independently.
+
+    Args:
+        logits_a (Tensor): shape [vocab] or [batch, vocab]
+        logits_b (Tensor): shape [vocab] or [batch, vocab]
+        top_k (int): plot only top-k logits
+        labels (tuple): labels for legend
+        title (str): plot title
+        compute_metrics (bool): whether to compute summary statistics
+
+    Returns:
+        dict (optional): summary metrics if compute_metrics=True
+    """
+    # Handle batch dimension
+    if logits_a.ndim == 2:
+        logits_a = logits_a[0]
+    if logits_b.ndim == 2:
+        logits_b = logits_b[0]
+
+    logits_a = logits_a.detach().cpu()
+    logits_b = logits_b.detach().cpu()
+
+    # Sort independently
+    a_sorted, _ = torch.sort(logits_a, descending=True)
+    b_sorted, _ = torch.sort(logits_b, descending=True)
+
+    if top_k is not None:
+        a_sorted = a_sorted[:top_k]
+        b_sorted = b_sorted[:top_k]
+
+    x = range(len(a_sorted))
+
+    plt.figure(figsize=(10, 5))
+    plt.plot(x, a_sorted, label=labels[0])
+    plt.plot(x, b_sorted, label=labels[1])
+    plt.xlabel("Token rank (sorted independently)")
+    plt.ylabel("Logit value")
+    plt.title(title)
+    plt.grid(True, linestyle="--", alpha=0.5)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+    if not compute_metrics:
+        return None
+
+    # ---- Quantitative diagnostics ----
+    metrics = {}
+
+    # Cosine similarity of sorted logits
+    metrics["cosine_similarity"] = F.cosine_similarity(
+        a_sorted.unsqueeze(0),
+        b_sorted.unsqueeze(0)
+    ).item()
+
+    # Mean absolute difference
+    metrics["mean_abs_diff"] = torch.mean(
+        torch.abs(a_sorted - b_sorted)
+    ).item()
+
+    # Top-1 gap difference
+    metrics["top1_gap_diff"] = (a_sorted[0] - b_sorted[0]).item()
+
+    # Tail mass comparison
+    tail_start = int(0.9 * len(a_sorted))
+    metrics["tail_mean_diff"] = (
+        torch.mean(a_sorted[tail_start:]) -
+        torch.mean(b_sorted[tail_start:])
+    ).item()
+
+    return metrics

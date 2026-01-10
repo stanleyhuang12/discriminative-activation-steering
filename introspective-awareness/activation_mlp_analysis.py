@@ -27,6 +27,10 @@ Brief experiment set up:
     Track MLP divergence for all the layers for all tokens in "Do you detect an injected thought?" (including layers before divergence)
     
     Plot a graph of the activation divergence and MLP divergence 
+    Right now we are treating the concept injection as just Gaussian noising with a +mean and a small variance
+    
+    We need to somehow show that the logit space token distributions looks very very different 
+    
 
 """
 
@@ -51,112 +55,35 @@ CONFIG.API.APIKEY = input("Enter your API key: ")
 model = LanguageModel("openai-community/gpt2")
 
 baseline_prompt = "Do you detect an injected thought?"
-concept_injected_prompt = "Do you detect horse an injected thought?"
-
-activation_outputs = []
-mlp_hiddens = []
-mlp_gelus = []
-
-activation_outputs_inj = []
-mlp_hiddens_inj = []
-mlp_gelus_inj = []
-
-activations_list = []
-# For an individual batch 
-with model.trace() as tracer: 
-    with tracer.invoke(baseline_prompt) as invoker_baseline: 
-        for l in model.transformer.h: 
-            activations = l.attn.output[0].save()
-            mlp_hidden = l.mlp.c_fc.output[0].save()
-            mlp_gelu = l.mlp.act.output[0].save()
-            activation_outputs.append(activations)
-            mlp_hiddens.append(mlp_hidden)
-            mlp_gelus.append(mlp_gelu)
-            
-    with tracer.invoke(concept_injected_prompt) as invoker_injected: 
-        for l in model.transformer.h: 
-            
-            activations = l.attn.output[0]
-            activations[:, -1] = 0
-            activations_list.append(activations.save())
-            mlp_hidden = l.mlp.c_fc.output[0].save()
-            mlp_gelu = l.mlp.act.output[0].save()
-            
-            activation_outputs_inj.append(activations)
-            mlp_hiddens_inj.append(mlp_hidden)
-            mlp_gelus_inj.append(mlp_gelu)
-            
+# concept_injected_prompt = "Do you detect horse an injected thought?"
 
 
-     
-acts_corr_list, mlp_corrs_list = compare_layerwise_cosine_similarity(
-    activation_outputs=activation_outputs,
-    activation_outputs_inj=activation_outputs_inj,
-    mlp_hiddens=mlp_gelus,
-    mlp_hiddens_inj=mlp_gelus_inj,
-    token_pos=-1
-)
-import matplotlib.pyplot as plt
-
-activation_dict = extract_activations(
+activation_dict, logits, logits_inj = extract_activations(
     model=model,
     baseline_prompt=baseline_prompt,
-    inject_noise=True
+    inject_noise=True #baseline noise_variance = 0.5
 )
 
-activation_dict_2 = extract_activations(
+activation_dict_2, logits, logits_inj = extract_activations(
     model=model,
     baseline_prompt=baseline_prompt, 
     inject_noise=True, 
-    noise_variance=1
+    noise_mean=1,
+    noise_variance=0.75
 )
 
+logits[-1].sort()
+corr_dict = compute_layerwise_cosine_similarity(activation_dict)
+corr_dict_2 = compute_layerwise_cosine_similarity(activation_dict_2)
+plot_layerwise_correlations(corr_dict)
+plot_layerwise_correlations(corr_dict_2)
 
-print(activation_dict.keys())
-act_out_corr, gelu_out_corr = compare_layerwise_cosine_similarity(
-    activation_outputs=activation_dict['act_out'],
-    activation_outputs_inj=activation_dict['act_out_inj'],
-    mlp_hiddens=activation_dict['mlp_hid'],
-    mlp_hiddens_inj=activation_dict['mlp_hid_inj']
-)
-act_out_corr, gelu_out_corr = compare_layerwise_cosine_similarity(
-    activation_outputs=activation_dict_2['act_out'],
-    activation_outputs_inj=activation_dict_2['act_out_inj'],
-    mlp_hiddens=activation_dict_2['mlp_act'],
-    mlp_hiddens_inj=activation_dict_2['mlp_acts_inj']
-)
+plot_sorted_logit_distribution(logits=logits)
+plot_sorted_logit_distribution(logits=logits_inj)
 
-
-
-num_layers = len(act_out_corr)
-layers = list(range(num_layers))  # x-axis: layer indices
-
-plt.figure(figsize=(10, 5))
-
-# Plot activation correlations
-plt.plot(layers, act_out_corr, marker='o', color='blue', label='Activations')
-
-# Plot MLP correlations
-plt.plot(layers, gelu_out_corr, marker='s', color='red', label='MLP hidden states')
-
-plt.xlabel('Layer')
-plt.ylabel('Cosine Similarity')
-plt.title('Layerwise Cosine Similarity between Original and Injected Activations')
-plt.xticks(layers)  # show all layer numbers
-plt.ylim(0, 1)      # cosine similarity is between 0 and 1
-plt.grid(True, linestyle='--', alpha=0.5)
-plt.legend()
-plt.tight_layout()
-
-plt.show()
-
-mlp_hiddens[0][-1, :]
-activation_outputs[0][0, -1, :]
-# 1, 7, 768
-
-activation_outputs[0].size()
-mlp_hiddens[0].size()
-# 7, 768
+compare_sorted_logit_distributions(logits_a=logits,
+                                   logits_b=logits_inj,
+                                   )
 
 
 llm = LanguageModel("meta-llama/Meta-Llama-3.1-8B")
