@@ -68,7 +68,7 @@ activation_dict_2, logits, logits_inj = extract_activations(
     model=model,
     baseline_prompt=baseline_prompt, 
     inject_noise=True, 
-    noise_mean=1,
+    noise_mean=5,
     noise_variance=0.75
 )
 
