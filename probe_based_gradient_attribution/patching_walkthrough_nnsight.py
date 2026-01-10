@@ -288,36 +288,26 @@ def ioi_metric(
 print(f"Clean Baseline is 1: {ioi_metric(clean_logits).item():.4f}")
 print(f"Corrupted Baseline is 0: {ioi_metric(corrupted_logits).item():.4f}")
 
-
 clean_out = []
 corrupted_out = []
 corrupted_grads = []
 
-with model.trace() as tracer:
-    with tracer.invoke(prompts) as invoker_clean:
-        for layer in model.transformer.h:
-            attn_out = layer.attn.c_proj.input
-            clean_out.append(attn_out.save())
+with model.trace(prompts) as tracer:    
+   for layer in model.transformer.h:
+       attn_out = layer.attn.c_proj.input
+       clean_out.append(attn_out.save())
 
-    with tracer.invoke(prompts) as invoker_corrupt:
-        for layer in model.transformer.h:
-            attn_out = layer.attn.c_proj.input.save()
-            corrupted_out.append(attn_out.save())     # make sure gradient can flow
+with model.trace(prompts) as tracer:
+    for layer in model.transformer.h:
+        attn_out = layer.attn.c_proj.input
+        attn_out.retain_grad = True
+        corrupted_out.append(attn_out.save())
+
+    logits = model.lm_head.output.save()
+    value = ioi_metric(logits.cpu())
+
+    # new backward context
+    with value.sum().backward():
+        for saved_attn in corrupted_out[::-1]: # reversed access to activations
+            corrupted_grads.append(saved_attn.grad.save())
             
-        logits = model.lm_head.output.save()
-        value = ioi_metric(logits)
-        # value.sum().backward(retain_graph=True)
-        
-        with value.sum().backward():
-
-            value.grad.save()
-
-            for layer in reversed(model.transformer.h): 
-                attn_back = layer.attn.c_proj.input
-                with attn_back.sum().backward():
-                    corrupted_grads.append(attn_back.grad[:].save())
-
-    
-
-    
-corrupted_out[0].grad_fn

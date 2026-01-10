@@ -36,19 +36,22 @@ from nnsight import CONFIG
 import torch
 from torch.nn import functional as F
 
-from steering_utils import * 
 CONFIG.API.APIKEY = input("Enter your API key: ")
 
 
 model = LanguageModel("openai-community/gpt2")
 
 baseline_prompt = "Do you detect an injected thought?"
-concept_injected_prompt = "horse Do you detect an injected thought?"
+concept_injected_prompt = "Do you detect horse an injected thought?"
+
+
 activation_outputs = []
 mlp_hiddens = []
+mlp_gelus = []
 
 activation_outputs_inj = []
 mlp_hiddens_inj = []
+mlp_gelus_inj = []
 
 # For an individual batch 
 with model.trace() as tracer: 
@@ -56,14 +59,21 @@ with model.trace() as tracer:
         for l in model.transformer.h: 
             activations = l.attn.output[0].save()
             mlp_hidden = l.mlp.c_fc.output[0].save()
+            mlp_gelu = l.mlp.act.output[0].save()
             activation_outputs.append(activations)
             mlp_hiddens.append(mlp_hidden)
+            mlp_gelus.append(mlp_gelu)
+            
     with tracer.invoke(concept_injected_prompt) as invoker_injected: 
         for l in model.transformer.h: 
             activations = l.attn.output[0].save()
             mlp_hidden = l.mlp.c_fc.output[0].save()
+            mlp_gelu = l.mlp.act.output[0].save()
+            
             activation_outputs_inj.append(activations)
             mlp_hiddens_inj.append(mlp_hidden)
+            mlp_gelus_inj.append(mlp_gelu)
+
             
 def compare_layerwise_cosine_similarity(
     activation_outputs,
@@ -77,24 +87,48 @@ def compare_layerwise_cosine_similarity(
     for act1, act2 in zip(activation_outputs, activation_outputs_inj): 
         act1 = act1[0, token_pos, :]
         act2 = act2[0, token_pos, :]
-        cos = F.cosine_similarity(act1.flatten(), act2.flatten())
-        activation_correlation_by_layer.append(cos)
+        cos = F.cosine_similarity(act1.flatten().unsqueeze(0), act2.flatten().unsqueeze(0))
+        activation_correlation_by_layer.append(cos.item())
         
     for mlp1, mlp2 in zip(mlp_hiddens, mlp_hiddens_inj): 
         mlp1 = mlp1[token_pos, :]
         mlp2 = mlp2[token_pos, :]
-        cos = F.cosine_similarity(mlp1.flatten(), mlp2.flatten())
-        mlp_correlation_by_layer.append(cos)
+        cos = F.cosine_similarity(mlp1.flatten().unsqueeze(0), mlp2.flatten().unsqueeze(0))
+        mlp_correlation_by_layer.append(cos.item())
     
     return activation_correlation_by_layer, mlp_correlation_by_layer
 
-compare_layerwise_cosine_similarity(
+acts_corr_list, mlp_corrs_list = compare_layerwise_cosine_similarity(
     activation_outputs=activation_outputs,
     activation_outputs_inj=activation_outputs_inj,
-    mlp_hiddens=mlp_hiddens,
-    mlp_hiddens_inj=mlp_hiddens_inj
+    mlp_hiddens=mlp_gelus,
+    mlp_hiddens_inj=mlp_gelus_inj,
+    token_pos=-1
 )
+import matplotlib.pyplot as plt
 
+
+num_layers = len(acts_corr_list)
+layers = list(range(num_layers))  # x-axis: layer indices
+
+plt.figure(figsize=(10, 5))
+
+# Plot activation correlations
+plt.plot(layers, acts_corr_list, marker='o', color='blue', label='Activations')
+
+# Plot MLP correlations
+plt.plot(layers, mlp_corrs_list, marker='s', color='red', label='MLP hidden states')
+
+plt.xlabel('Layer')
+plt.ylabel('Cosine Similarity')
+plt.title('Layerwise Cosine Similarity between Original and Injected Activations')
+plt.xticks(layers)  # show all layer numbers
+plt.ylim(0, 1)      # cosine similarity is between 0 and 1
+plt.grid(True, linestyle='--', alpha=0.5)
+plt.legend()
+plt.tight_layout()
+
+plt.show()
 
 mlp_hiddens[0][-1, :]
 activation_outputs[0][0, -1, :]
