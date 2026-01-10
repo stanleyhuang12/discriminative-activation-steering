@@ -35,6 +35,15 @@ from nnsight import LanguageModel
 from nnsight import CONFIG
 import torch
 from torch.nn import functional as F
+from .activations_utils import *
+import sys
+import os
+sys.path.append("/Users/stanleyhuang/Desktop/01 Projects/discriminative-activation-steering/introspective-awareness")
+
+from activations_utils import *
+import importlib
+import activations_utils
+importlib.reload(activations_utils)
 
 CONFIG.API.APIKEY = input("Enter your API key: ")
 
@@ -53,6 +62,7 @@ activation_outputs_inj = []
 mlp_hiddens_inj = []
 mlp_gelus_inj = []
 
+activations_list = []
 # For an individual batch 
 with model.trace() as tracer: 
     with tracer.invoke(baseline_prompt) as invoker_baseline: 
@@ -66,7 +76,10 @@ with model.trace() as tracer:
             
     with tracer.invoke(concept_injected_prompt) as invoker_injected: 
         for l in model.transformer.h: 
-            activations = l.attn.output[0].save()
+            
+            activations = l.attn.output[0]
+            activations[:, -1] = 0
+            activations_list.append(activations.save())
             mlp_hidden = l.mlp.c_fc.output[0].save()
             mlp_gelu = l.mlp.act.output[0].save()
             
@@ -76,30 +89,7 @@ with model.trace() as tracer:
             
 
 
-            
-def compare_layerwise_cosine_similarity(
-    activation_outputs,
-    activation_outputs_inj, 
-    mlp_hiddens, 
-    mlp_hiddens_inj,
-    token_pos = -1
-): 
-    activation_correlation_by_layer = []
-    mlp_correlation_by_layer = []
-    for act1, act2 in zip(activation_outputs, activation_outputs_inj): 
-        act1 = act1[0, token_pos, :]
-        act2 = act2[0, token_pos, :]
-        cos = F.cosine_similarity(act1.flatten().unsqueeze(0), act2.flatten().unsqueeze(0))
-        activation_correlation_by_layer.append(cos.item())
-        
-    for mlp1, mlp2 in zip(mlp_hiddens, mlp_hiddens_inj): 
-        mlp1 = mlp1[token_pos, :]
-        mlp2 = mlp2[token_pos, :]
-        cos = F.cosine_similarity(mlp1.flatten().unsqueeze(0), mlp2.flatten().unsqueeze(0))
-        mlp_correlation_by_layer.append(cos.item())
-    
-    return activation_correlation_by_layer, mlp_correlation_by_layer
-
+     
 acts_corr_list, mlp_corrs_list = compare_layerwise_cosine_similarity(
     activation_outputs=activation_outputs,
     activation_outputs_inj=activation_outputs_inj,
@@ -109,6 +99,14 @@ acts_corr_list, mlp_corrs_list = compare_layerwise_cosine_similarity(
 )
 import matplotlib.pyplot as plt
 
+activation_dict = extract_activations(
+    model=model,
+    baseline_prompt=baseline_prompt,
+    inject_noise=True
+)
+
+
+activations[:, [-1, -2], :].size()
 
 num_layers = len(acts_corr_list)
 layers = list(range(num_layers))  # x-axis: layer indices
@@ -142,59 +140,3 @@ mlp_hiddens[0].size()
 
 
 llm = LanguageModel("meta-llama/Meta-Llama-3.1-8B")
-
-def extract_activations(
-    model, 
-    baseline_prompt, 
-    inject_noise=True,
-    noise_mean=0.0,
-    noise_variance=0.5, 
-    random_seed=12
-): 
-    """
-    Takes a baseline prompt and runs two trials where one is a regular forward pass and the other 
-    injects a Gaussian noise 
-    """
-    torch.manual_seed(random_seed)
-
-    activation_outputs = []
-    mlp_hiddens = []
-    mlp_acts = []
-
-    activation_outputs_inj = []
-    mlp_hiddens_inj = []
-    mlp_acts_inj = []
-    
-    with model.trace() as tracer: 
-        
-        with tracer.invoke(baseline_prompt) as invoker_baseline: 
-            for l in model.transformer.h: 
-                activations = l.attn.output[0].save()
-                mlp_hidden = l.mlp.c_fc.output[0].save()
-                mlp_gelu = l.mlp.act.output[0].save()
-                activation_outputs.append(activations)
-                mlp_hiddens.append(mlp_hidden)
-                mlp_acts.append(mlp_gelu)
-        
-        with tracer.invoke(baseline_prompt) as invoker_injected: 
-            for l in model.transformer.h: 
-                if inject_noise:
-                    noise = torch.normal(noise_mean, noise_variance, size=l.attn.output[0].size())
-                    l.attn.output[0] += noise 
-                activations = l.attn.output[0].save()
-                mlp_hidden = l.mlp.c_fc.output[0].save()
-                mlp_gelu = l.mlp.act.output[0].save()
-                activation_outputs_inj.append(activations)
-                mlp_hiddens_inj.append(mlp_hidden)
-                mlp_acts_inj.append(mlp_gelu)
-    return {
-        "act_out": activation_outputs,
-        "act_out_inj": activation_outputs_inj,
-        "mlp_hid": mlp_hiddens,
-        "mlp_hid_inj": mlp_hiddens_inj,
-        "mlp_act": mlp_acts,
-        "mlp_acts_inj": mlp_acts_inj
-    }
-
-
-
