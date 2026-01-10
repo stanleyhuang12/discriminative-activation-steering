@@ -73,6 +73,8 @@ with model.trace() as tracer:
             activation_outputs_inj.append(activations)
             mlp_hiddens_inj.append(mlp_hidden)
             mlp_gelus_inj.append(mlp_gelu)
+            
+
 
             
 def compare_layerwise_cosine_similarity(
@@ -141,6 +143,58 @@ mlp_hiddens[0].size()
 
 llm = LanguageModel("meta-llama/Meta-Llama-3.1-8B")
 
-llm
+def extract_activations(
+    model, 
+    baseline_prompt, 
+    inject_noise=True,
+    noise_mean=0.0,
+    noise_variance=0.5, 
+    random_seed=12
+): 
+    """
+    Takes a baseline prompt and runs two trials where one is a regular forward pass and the other 
+    injects a Gaussian noise 
+    """
+    torch.manual_seed(random_seed)
+
+    activation_outputs = []
+    mlp_hiddens = []
+    mlp_acts = []
+
+    activation_outputs_inj = []
+    mlp_hiddens_inj = []
+    mlp_acts_inj = []
+    
+    with model.trace() as tracer: 
+        
+        with tracer.invoke(baseline_prompt) as invoker_baseline: 
+            for l in model.transformer.h: 
+                activations = l.attn.output[0].save()
+                mlp_hidden = l.mlp.c_fc.output[0].save()
+                mlp_gelu = l.mlp.act.output[0].save()
+                activation_outputs.append(activations)
+                mlp_hiddens.append(mlp_hidden)
+                mlp_acts.append(mlp_gelu)
+        
+        with tracer.invoke(baseline_prompt) as invoker_injected: 
+            for l in model.transformer.h: 
+                if inject_noise:
+                    noise = torch.normal(noise_mean, noise_variance, size=l.attn.output[0].size())
+                    l.attn.output[0] += noise 
+                activations = l.attn.output[0].save()
+                mlp_hidden = l.mlp.c_fc.output[0].save()
+                mlp_gelu = l.mlp.act.output[0].save()
+                activation_outputs_inj.append(activations)
+                mlp_hiddens_inj.append(mlp_hidden)
+                mlp_acts_inj.append(mlp_gelu)
+    return {
+        "act_out": activation_outputs,
+        "act_out_inj": activation_outputs_inj,
+        "mlp_hid": mlp_hiddens,
+        "mlp_hid_inj": mlp_hiddens_inj,
+        "mlp_act": mlp_acts,
+        "mlp_acts_inj": mlp_acts_inj
+    }
+
 
 
